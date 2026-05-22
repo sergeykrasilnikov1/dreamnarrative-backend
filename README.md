@@ -66,8 +66,17 @@ dreamnarrative-backend/
 | `LLM_PROVIDER` | Описание |
 |----------------|----------|
 | `local` | **По умолчанию.** Qwen3.5-4B на GPU сервера, затем выгрузка → SDXL |
+| `openrouter` | [OpenRouter](https://openrouter.ai) — `deepseek/deepseek-v4-flash`, нужен `OPENROUTER_API_KEY` |
 | `openai` | Ollama / vLLM: `LLM_BASE_URL=http://127.0.0.1:11434/v1` |
-| `groq` | Groq API (нужен VPN) |
+| `groq` | Groq API (legacy) |
+
+**OpenRouter (DeepSeek V4 Flash):**
+```env
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_MODEL=deepseek/deepseek-v4-flash
+```
+Бесплатный tier: `deepseek/deepseek-v4-flash:free`
 
 Первый запуск `local` скачает модель с HuggingFace (~9 GB). Нужен `transformers>=4.52`.
 

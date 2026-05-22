@@ -2,9 +2,10 @@
 Универсальный LLM-клиент для NSM (без Groq).
 
 Провайдеры:
-  - local   — HuggingFace на GPU/CPU (без VPN, на Student GPU Container)
-  - openai  — любой OpenAI-compatible API (Ollama: http://localhost:11434/v1)
-  - groq    — legacy, если доступен
+  - local      — HuggingFace Qwen на GPU/CPU (Student GPU Container)
+  - openrouter — OpenRouter API (DeepSeek V4 Flash и др.)
+  - openai     — любой OpenAI-compatible API (Ollama)
+  - groq       — legacy
 """
 from __future__ import annotations
 
@@ -35,14 +36,49 @@ def chat_json(system: str, user: str) -> tuple[str, str]:
     provider = settings.LLM_PROVIDER.lower()
     if provider == "local":
         return _chat_local(system, user), settings.LLM_MODEL_ID
+    if provider == "openrouter":
+        return _chat_openrouter(system, user), settings.OPENROUTER_MODEL
     if provider == "openai":
         return _chat_openai_compatible(system, user), settings.LLM_MODEL
     if provider == "groq":
         return _chat_groq(system, user), settings.LLM_MODEL
     raise ValueError(
         f"Неизвестный LLM_PROVIDER={settings.LLM_PROVIDER!r}. "
-        "Используйте: local, openai, groq"
+        "Используйте: local, openrouter, openai, groq"
     )
+
+
+def _chat_openrouter(system: str, user: str) -> str:
+    api_key = settings.OPENROUTER_API_KEY or settings.LLM_API_KEY
+    if not api_key or api_key in ("your_openrouter_api_key", "sk-or-YOUR"):
+        raise ValueError(
+            "OPENROUTER_API_KEY не задан в .env (https://openrouter.ai/keys)"
+        )
+
+    base = settings.OPENROUTER_BASE_URL.rstrip("/")
+    url = f"{base}/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+    if settings.OPENROUTER_HTTP_REFERER:
+        headers["HTTP-Referer"] = settings.OPENROUTER_HTTP_REFERER
+    if settings.OPENROUTER_APP_TITLE:
+        headers["X-Title"] = settings.OPENROUTER_APP_TITLE
+
+    body = {
+        "model": settings.OPENROUTER_MODEL,
+        "temperature": settings.LLM_TEMPERATURE,
+        "max_tokens": settings.LLM_MAX_TOKENS,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    }
+    if settings.LLM_JSON_MODE:
+        body["response_format"] = {"type": "json_object"}
+
+    return _post_chat_completions(url, headers, body, provider_label="OpenRouter")
 
 
 def _chat_openai_compatible(system: str, user: str) -> str:
@@ -64,6 +100,12 @@ def _chat_openai_compatible(system: str, user: str) -> str:
     if settings.LLM_JSON_MODE:
         body["response_format"] = {"type": "json_object"}
 
+    return _post_chat_completions(url, headers, body, provider_label="LLM API")
+
+
+def _post_chat_completions(
+    url: str, headers: dict, body: dict, provider_label: str = "LLM API"
+) -> str:
     try:
         with httpx.Client(timeout=settings.LLM_TIMEOUT) as client:
             resp = client.post(url, headers=headers, json=body)
@@ -71,14 +113,20 @@ def _chat_openai_compatible(system: str, user: str) -> str:
             data = resp.json()
     except httpx.ConnectError as e:
         raise ConnectionError(
-            f"Не удалось подключиться к LLM API ({url}). "
-            "Проверьте LLM_BASE_URL или используйте LLM_PROVIDER=local. "
+            f"Не удалось подключиться к {provider_label} ({url}). "
+            "Проверьте сеть или LLM_PROVIDER=local. "
             f"Оригинал: {e}"
         ) from e
     except httpx.HTTPStatusError as e:
-        raise ValueError(f"LLM API HTTP {e.response.status_code}: {e.response.text[:300]}") from e
+        raise ValueError(
+            f"{provider_label} HTTP {e.response.status_code}: {e.response.text[:300]}"
+        ) from e
 
-    return data["choices"][0]["message"]["content"]
+    message = data["choices"][0]["message"]
+    content = message.get("content") or ""
+    if not content.strip() and message.get("reasoning"):
+        content = message["reasoning"]
+    return content
 
 
 def _chat_groq(system: str, user: str) -> str:

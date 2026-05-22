@@ -7,11 +7,20 @@ _ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 class Settings(BaseSettings):
     # LLM для NSM (local = без VPN на GPU-сервере)
-    LLM_PROVIDER: str = "local"  # local | openai | groq
+    LLM_PROVIDER: str = "local"  # local | openrouter | openai | groq
     LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = "http://127.0.0.1:11434/v1"  # Ollama
+    LLM_BASE_URL: str = "http://127.0.0.1:11434/v1"  # Ollama / generic OpenAI API
     LLM_MODEL: str = "llama3.2"  # для openai/groq
-    LLM_MODEL_ID: str = "Qwen/Qwen3.5-4B"  # для local (Qwen 3.5, text+vision)
+    LLM_MODEL_ID: str = "Qwen/Qwen3.5-4B"  # для local (Qwen 3.5)
+    LLM_DEVICE: str = "auto"  # auto | cuda | cpu (только local)
+
+    # OpenRouter — DeepSeek V4 Flash и др.
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_MODEL: str = "deepseek/deepseek-v4-flash"
+    OPENROUTER_HTTP_REFERER: str = "https://dreamnarrative.local"
+    OPENROUTER_APP_TITLE: str = "DreamNarrative"
+
     LLM_TEMPERATURE: float = 0.3
     LLM_MAX_TOKENS: int = 4096
     LLM_TIMEOUT: float = 120.0
@@ -41,9 +50,21 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
 
+    def llm_model_label(self) -> str:
+        p = self.LLM_PROVIDER.lower()
+        if p == "local":
+            return self.LLM_MODEL_ID
+        if p == "openrouter":
+            return self.OPENROUTER_MODEL
+        return self.LLM_MODEL
+
     def llm_configured(self) -> bool:
-        if self.LLM_PROVIDER.lower() == "local":
+        p = self.LLM_PROVIDER.lower()
+        if p == "local":
             return True
+        if p == "openrouter":
+            key = self.OPENROUTER_API_KEY or self.LLM_API_KEY
+            return bool(key) and key not in ("", "your_openrouter_api_key", "sk-or-YOUR")
         key = self.LLM_API_KEY or self.GROQ_API_KEY
         return bool(key) and not key.startswith("gsk_YOUR") and key != "your_groq_api_key"
 
