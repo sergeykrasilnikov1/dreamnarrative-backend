@@ -39,7 +39,14 @@ python -c "import torch; print(torch.cuda.is_available())"
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-### 4. Откройте в браузере
+### 4. Проверка интернета (Jupyter)
+
+```bash
+# В JupyterLab откройте и выполните все ячейки:
+notebooks/check_internet.ipynb
+```
+
+### 5. Откройте в браузере
 
 По инструкции платформы:
 

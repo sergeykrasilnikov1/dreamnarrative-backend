@@ -41,7 +41,67 @@ Build detailed SDXL-optimized prompts (include: location, characters, lighting, 
 Dream text:
 \"\"\"{dream_text}\"\"\"
 
-Output {n_scenes} scenes in the JSON format. ONLY JSON, no other text."""
+Output {n_scenes} scenes in the JSON format. ONLY JSON, no other text.
+
+RULES for scenes[].characters:
+- Use ONLY string identifiers from the top-level characters[].name list.
+- Example: "characters": ["flying_person", "silver_hair_woman"] — NOT null, NOT {{}} objects."""
+
+
+def _extract_scene_character_names(raw_chars, known_names: set[str]) -> list[str]:
+    """Парсит characters сцены: строки, объекты {{name:...}}, отбрасывает null."""
+    names: list[str] = []
+    for item in raw_chars or []:
+        if item is None:
+            continue
+        if isinstance(item, str):
+            n = item.strip()
+            if n and n.lower() not in ("null", "none", "unknown"):
+                names.append(n)
+        elif isinstance(item, dict):
+            n = (item.get("name") or item.get("character") or item.get("id") or "").strip()
+            if n:
+                names.append(n)
+    # только известные имена; остальное — как есть (LLM мог слегка изменить id)
+    out: list[str] = []
+    for n in names:
+        if n in known_names and n not in out:
+            out.append(n)
+        elif n not in out:
+            out.append(n)
+    return out
+
+
+def _infer_scene_characters(
+    scene: dict, scene_id: int, char_defs: list[dict]
+) -> list[str]:
+    """Если LLM вернул null — берём из characters[].scenes_present или текста сцены."""
+    from_scenes_present = [
+        c["name"]
+        for c in char_defs
+        if c.get("name") and scene_id in (c.get("scenes_present") or [])
+    ]
+    if from_scenes_present:
+        return from_scenes_present
+
+    text = " ".join(
+        str(scene.get(k, ""))
+        for k in ("description", "location", "sdxl_prompt")
+    ).lower()
+    found: list[str] = []
+    for c in char_defs:
+        name = (c.get("name") or "").strip()
+        if not name:
+            continue
+        key = name.replace("_", " ")
+        if name in text or key in text:
+            found.append(name)
+            continue
+        for part in name.split("_"):
+            if len(part) > 3 and part in text:
+                found.append(name)
+                break
+    return found
 
 
 def run_nsm(dream_text: str, n_scenes: int, job_id: str) -> NSMResponse:
@@ -59,37 +119,40 @@ def run_nsm(dream_text: str, n_scenes: int, job_id: str) -> NSMResponse:
     except Exception as e:
         raise ValueError(f"LLM error ({settings.LLM_PROVIDER}): {e}") from e
     finally:
-        if settings.LLM_PROVIDER.lower() == "local":
-            unload_local_llm()
+        unload_local_llm()
 
     elapsed_ms = int((time.time() - t0) * 1000)
 
-    characters = []
+    char_defs: list[dict] = []
     for c in data.get("characters", []):
         if isinstance(c, str):
             c = {"name": c, "appearance": c, "canonical_appearance": c}
-        name = c.get("name") or "unknown"
-        characters.append(
-            CharacterSchema(
-                name=name,
-                appearance=c.get("appearance", ""),
-                canonical_appearance=c.get("canonical_appearance", c.get("appearance", "")),
-                scenes_present=[
-                    int(s["scene_id"])
-                    for s in data.get("scenes", [])
-                    if name in (s.get("characters") or [])
-                ],
-            )
-        )
+        if not isinstance(c, dict):
+            continue
+        name = (c.get("name") or "").strip() or "unknown"
+        char_defs.append({**c, "name": name})
 
-    scenes = []
+    known_names = {c["name"] for c in char_defs}
+
+    scenes: list[SceneSchema] = []
     for s in data.get("scenes", []):
+        scene_id = int(s.get("scene_id", len(scenes) + 1))
+        scene_chars = _extract_scene_character_names(s.get("characters"), known_names)
+        if not scene_chars:
+            scene_chars = _infer_scene_characters(s, scene_id, char_defs)
+
+        objects = [
+            str(x).strip()
+            for x in (s.get("objects") or [])
+            if x is not None and str(x).strip()
+        ]
+
         scenes.append(
             SceneSchema(
-                scene_id=int(s.get("scene_id", len(scenes) + 1)),
+                scene_id=scene_id,
                 description=s.get("description", ""),
-                characters=[str(x) for x in s.get("characters", [])],
-                objects=[str(x) for x in s.get("objects", [])],
+                characters=scene_chars,
+                objects=objects,
                 location=s.get("location", ""),
                 emotion=s.get("emotion", "wonder"),
                 sdxl_prompt=s.get("sdxl_prompt", s.get("description", "")),
@@ -102,6 +165,16 @@ def run_nsm(dream_text: str, n_scenes: int, job_id: str) -> NSMResponse:
 
     if not scenes:
         raise ValueError("LLM не вернул ни одной сцены")
+
+    characters = [
+        CharacterSchema(
+            name=c["name"],
+            appearance=c.get("appearance", ""),
+            canonical_appearance=c.get("canonical_appearance", c.get("appearance", "")),
+            scenes_present=[sc.scene_id for sc in scenes if c["name"] in sc.characters],
+        )
+        for c in char_defs
+    ]
 
     return NSMResponse(
         job_id=job_id,

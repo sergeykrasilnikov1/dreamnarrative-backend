@@ -849,7 +849,7 @@ function renderNSM(result) {
       description: s.description.substring(0, 80) + (s.description.length > 80 ? '...' : ''),
       location: s.location,
       emotion: s.emotion,
-      characters: s.characters.map(c => c.name),
+      characters: (s.characters || []).map(c => typeof c === 'string' ? c : (c?.name ?? String(c))),
       objects: s.objects
     }))
   }, null, 2);
