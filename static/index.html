@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DreamNarrative — Визуализация алгоритма</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+  --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+  --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
+  --space-5: 1.25rem; --space-6: 1.5rem; --space-8: 2rem; --space-10: 2.5rem;
+  --space-12: 3rem; --space-16: 4rem;
+  --radius-sm: 0.375rem; --radius-md: 0.5rem; --radius-lg: 0.75rem; --radius-xl: 1rem;
+  --radius-full: 9999px;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-theme="dark"] {
+  --color-bg: #0f0f10;
+  --color-surface: #161618;
+  --color-surface-2: #1c1c1f;
+  --color-surface-offset: #222226;
+  --color-border: #2a2a2f;
+  --color-divider: #222226;
+  --color-text: #e8e8ec;
+  --color-text-muted: #888892;
+  --color-text-faint: #555560;
+  --color-primary: #7c6aff;
+  --color-primary-hover: #9585ff;
+  --color-primary-highlight: #2a2545;
+  --color-success: #4ade80;
+  --color-success-bg: #1a2e1f;
+  --color-warning: #fbbf24;
+  --color-warning-bg: #2a2010;
+  --color-error: #f87171;
+  --color-error-bg: #2a1515;
+  --color-orange: #fb923c;
+  --color-blue: #60a5fa;
+  --color-teal: #2dd4bf;
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-md: 0 4px 12px oklch(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 32px oklch(0 0 0 / 0.5);
+}
+[data-theme="light"] {
+  --color-bg: #f5f5f7;
+  --color-surface: #ffffff;
+  --color-surface-2: #f9f9fb;
+  --color-surface-offset: #f0f0f3;
+  --color-border: #e0e0e8;
+  --color-divider: #ebebf0;
+  --color-text: #18181b;
+  --color-text-muted: #71717a;
+  --color-text-faint: #a1a1aa;
+  --color-primary: #6c55ff;
+  --color-primary-hover: #5340e0;
+  --color-primary-highlight: #ede9ff;
+  --color-success: #16a34a;
+  --color-success-bg: #dcfce7;
+  --color-warning: #d97706;
+  --color-warning-bg: #fef3c7;
+  --color-error: #dc2626;
+  --color-error-bg: #fee2e2;
+  --color-orange: #ea580c;
+  --color-blue: #2563eb;
+  --color-teal: #0d9488;
+  --shadow-sm: 0 1px 2px oklch(0.2 0.01 80 / 0.06);
+  --shadow-md: 0 4px 12px oklch(0.2 0.01 80 / 0.08);
+  --shadow-lg: 0 12px 32px oklch(0.2 0.01 80 / 0.12);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
+body { min-height: 100dvh; font-family: var(--font-body); font-size: var(--text-base); color: var(--color-text); background: var(--color-bg); line-height: 1.6; }
+button { cursor: pointer; border: none; background: none; font: inherit; color: inherit; }
+input, textarea, select { font: inherit; color: inherit; }
+/* Layout */
+.app { display: grid; grid-template-rows: 56px 1fr; height: 100dvh; overflow: hidden; }
+.topbar { display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-6); background: var(--color-surface); border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: 100; }
+.topbar-logo { display: flex; align-items: center; gap: var(--space-3); text-decoration: none; color: var(--color-text); }
+.topbar-logo svg { flex-shrink: 0; }
+.topbar-title { font-size: var(--text-sm); font-weight: 600; letter-spacing: -0.02em; }
+.topbar-subtitle { font-size: var(--text-xs); color: var(--color-text-muted); }
+.topbar-spacer { flex: 1; }
+.theme-toggle { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-md); color: var(--color-text-muted); transition: background var(--transition), color var(--transition); }
+.theme-toggle:hover { background: var(--color-surface-offset); color: var(--color-text); }
+.main { display: grid; grid-template-columns: 320px 1fr; overflow: hidden; }
+.sidebar { display: flex; flex-direction: column; background: var(--color-surface); border-right: 1px solid var(--color-border); overflow-y: auto; }
+.sidebar-section { padding: var(--space-4); border-bottom: 1px solid var(--color-divider); }
+.sidebar-section:last-child { border-bottom: none; flex: 1; }
+.section-label { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-faint); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-3); }
+.content { overflow-y: auto; padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-6); }
+
+/* Form elements */
+label { display: block; font-size: var(--text-sm); font-weight: 500; color: var(--color-text-muted); margin-bottom: var(--space-2); }
+textarea, input[type="text"], select {
+  width: 100%; padding: var(--space-2) var(--space-3); background: var(--color-surface-2);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  color: var(--color-text); font-size: var(--text-sm); resize: vertical;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+textarea:focus, input[type="text"]:focus, select:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-primary) 20%, transparent); }
+textarea { min-height: 100px; }
+.form-row { margin-bottom: var(--space-4); }
+.form-row:last-child { margin-bottom: 0; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; transition: background var(--transition), color var(--transition), box-shadow var(--transition); }
+.btn-primary { background: var(--color-primary); color: #fff; }
+.btn-primary:hover { background: var(--color-primary-hover); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost { color: var(--color-text-muted); }
+.btn-ghost:hover { background: var(--color-surface-offset); color: var(--color-text); }
+.btn-full { width: 100%; justify-content: center; }
+.btn-sm { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); }
+
+/* Badges */
+.badge { display: inline-flex; align-items: center; gap: var(--space-1); padding: 2px var(--space-2); border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: 500; }
+.badge-purple { background: var(--color-primary-highlight); color: var(--color-primary); }
+.badge-green { background: var(--color-success-bg); color: var(--color-success); }
+.badge-orange { background: var(--color-warning-bg); color: var(--color-warning); }
+.badge-blue { background: color-mix(in oklch, var(--color-blue) 15%, transparent); color: var(--color-blue); }
+.badge-teal { background: color-mix(in oklch, var(--color-teal) 15%, transparent); color: var(--color-teal); }
+
+/* Pipeline */
+.pipeline { display: flex; flex-direction: column; gap: var(--space-1); }
+.pipeline-step { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer; transition: background var(--transition), border-color var(--transition); }
+.pipeline-step:hover { background: var(--color-surface-offset); }
+.pipeline-step.active { background: var(--color-primary-highlight); border-color: color-mix(in oklch, var(--color-primary) 30%, transparent); }
+.pipeline-step.done .step-icon { background: var(--color-success-bg); color: var(--color-success); }
+.pipeline-step.running .step-icon { background: var(--color-primary-highlight); color: var(--color-primary); animation: pulse 1.2s ease-in-out infinite; }
+.pipeline-step.waiting .step-icon { background: var(--color-surface-offset); color: var(--color-text-faint); }
+.step-icon { width: 32px; height: 32px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: var(--text-xs); font-weight: 700; font-family: var(--font-mono); }
+.step-info { flex: 1; min-width: 0; }
+.step-name { font-size: var(--text-sm); font-weight: 500; }
+.step-desc { font-size: var(--text-xs); color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+/* Cards */
+.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+.card-header { padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--color-divider); display: flex; align-items: center; gap: var(--space-3); }
+.card-title { font-size: var(--text-base); font-weight: 600; }
+.card-body { padding: var(--space-5); }
+.card-body-sm { padding: var(--space-4); }
+
+/* JSON viewer */
+.json-block { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-4); font-family: var(--font-mono); font-size: var(--text-xs); overflow-x: auto; white-space: pre; color: var(--color-text-muted); max-height: 280px; overflow-y: auto; line-height: 1.7; }
+.json-key { color: var(--color-blue); }
+.json-str { color: var(--color-teal); }
+.json-num { color: var(--color-orange); }
+.json-bool { color: var(--color-primary); }
+
+/* Metrics */
+.metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.metric-card { background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
+.metric-label { font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: var(--space-1); }
+.metric-value { font-size: var(--text-lg); font-weight: 700; font-family: var(--font-mono); color: var(--color-text); }
+.metric-delta { font-size: var(--text-xs); color: var(--color-success); }
+
+/* Image grid */
+.image-grid { display: grid; gap: var(--space-4); }
+.scene-card { background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+.scene-img { width: 100%; aspect-ratio: 1; background: var(--color-surface-offset); position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.scene-canvas { width: 100%; height: 100%; }
+.scene-meta { padding: var(--space-3) var(--space-4); }
+.scene-num { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-faint); margin-bottom: var(--space-1); font-family: var(--font-mono); }
+.scene-prompt { font-size: var(--text-xs); color: var(--color-text-muted); line-height: 1.5; }
+
+/* Characters list */
+.char-item { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3); background: var(--color-surface-2); border-radius: var(--radius-md); margin-bottom: var(--space-2); }
+.char-avatar { width: 36px; height: 36px; border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); font-weight: 700; flex-shrink: 0; }
+.char-info { flex: 1; }
+.char-name { font-size: var(--text-sm); font-weight: 600; }
+.char-appearance { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 2px; line-height: 1.5; }
+
+/* Log */
+.log-container { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); font-family: var(--font-mono); font-size: var(--text-xs); height: 160px; overflow-y: auto; }
+.log-entry { display: flex; gap: var(--space-2); padding: 2px 0; line-height: 1.5; }
+.log-time { color: var(--color-text-faint); flex-shrink: 0; }
+.log-info { color: var(--color-blue); }
+.log-success { color: var(--color-success); }
+.log-warn { color: var(--color-warning); }
+.log-error { color: var(--color-error); }
+.log-data { color: var(--color-text-muted); }
+
+/* Progress bar */
+.progress-bar { height: 4px; background: var(--color-surface-offset); border-radius: var(--radius-full); overflow: hidden; }
+.progress-fill { height: 100%; background: var(--color-primary); border-radius: var(--radius-full); transition: width 0.4s ease; }
+
+/* Tabs */
+.tabs { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--color-divider); padding: 0 var(--space-5); }
+.tab { padding: var(--space-3) var(--space-4); font-size: var(--text-sm); font-weight: 500; color: var(--color-text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color var(--transition), border-color var(--transition); }
+.tab:hover { color: var(--color-text); }
+.tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.tab-content { display: none; padding: var(--space-5); }
+.tab-content.active { display: block; }
+
+/* Pipeline connector */
+.pipeline-connector { width: 2px; height: 12px; background: var(--color-border); margin: 0 15px; }
+
+/* Attention viz */
+.attention-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+.attention-cell { aspect-ratio: 1; border-radius: 2px; transition: background 0.3s; }
+
+/* Comparison table */
+.cmp-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+.cmp-table th { text-align: left; padding: var(--space-2) var(--space-3); font-weight: 600; color: var(--color-text-muted); border-bottom: 1px solid var(--color-border); }
+.cmp-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-divider); font-family: var(--font-mono); }
+.cmp-table tr:last-child td { border-bottom: none; }
+.cmp-table tr.highlight td { background: var(--color-primary-highlight); color: var(--color-primary); font-weight: 600; }
+.cmp-table td.best { color: var(--color-success); font-weight: 600; }
+
+/* Sample dreams */
+.sample-btn { width: 100%; text-align: left; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); font-size: var(--text-xs); color: var(--color-text-muted); border: 1px solid var(--color-border); background: var(--color-surface-2); margin-bottom: var(--space-2); cursor: pointer; transition: all var(--transition); line-height: 1.5; }
+.sample-btn:hover { background: var(--color-primary-highlight); border-color: var(--color-primary); color: var(--color-text); }
+
+/* Empty state */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: var(--space-16) var(--space-8); color: var(--color-text-muted); }
+.empty-icon { font-size: 2.5rem; margin-bottom: var(--space-4); opacity: 0.4; }
+.empty-title { font-size: var(--text-base); font-weight: 600; color: var(--color-text); margin-bottom: var(--space-2); }
+.empty-desc { font-size: var(--text-sm); max-width: 36ch; }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .main { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Topbar -->
+  <header class="topbar">
+    <a class="topbar-logo" href="#">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="DreamNarrative">
+        <rect width="28" height="28" rx="7" fill="var(--color-primary)"/>
+        <ellipse cx="14" cy="11" rx="6" ry="4" fill="white" opacity="0.15"/>
+        <path d="M8 13 Q10 9 14 9 Q18 9 20 13 Q18 18 14 19 Q10 18 8 13Z" fill="white" opacity="0.9"/>
+        <circle cx="12" cy="13" r="1.5" fill="var(--color-primary)"/>
+        <circle cx="16" cy="13" r="1.5" fill="var(--color-primary)"/>
+        <path d="M10 17 Q14 22 18 17" stroke="white" stroke-width="1.2" stroke-linecap="round" fill="none" opacity="0.6"/>
+      </svg>
+      <div>
+        <div class="topbar-title">DreamNarrative</div>
+        <div class="topbar-subtitle">NSM · CIM · LAF Pipeline</div>
+      </div>
+    </a>
+    <div class="topbar-spacer"></div>
+    <span class="badge badge-purple">ВКР Красильников 2026</span>
+    <button class="theme-toggle" data-theme-toggle aria-label="Переключить тему">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </header>
+
+  <div class="main">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <!-- Input section -->
+      <div class="sidebar-section">
+        <div class="section-label">Входной текст сна</div>
+        <div class="form-row">
+          <textarea id="dream-input" placeholder="Опишите сон... (на английском или русском)" rows="5">I was flying over a vast ocean at night. The water was glowing with strange bioluminescent light. A tall woman with silver hair stood on a rocky cliff below, watching me. She called my name and suddenly I began falling towards the dark water.</textarea>
+        </div>
+        <div class="form-row">
+          <label>Примеры из SDDb:</label>
+          <button class="sample-btn" onclick="setSample(0)">✦ REM-сон: полёт над океаном</button>
+          <button class="sample-btn" onclick="setSample(1)">✦ Кошмар: тёмный лес с преследованием</button>
+          <button class="sample-btn" onclick="setSample(2)">✦ Люцидный сон: городской лабиринт</button>
+        </div>
+        <div class="form-row">
+          <label>Кол-во сцен (N)</label>
+          <select id="scene-count">
+            <option value="3">3 сцены</option>
+            <option value="4" selected>4 сцены</option>
+            <option value="5">5 сцен</option>
+            <option value="6">6 сцен</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>CFG Scale (guidance)</label>
+          <input type="text" id="cfg-scale" value="7.5" placeholder="7.5">
+        </div>
+        <button class="btn btn-primary btn-full" id="run-btn" onclick="runPipeline()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Запустить пайплайн
+        </button>
+      </div>
+
+      <!-- Pipeline steps -->
+      <div class="sidebar-section">
+        <div class="section-label">Этапы обработки</div>
+        <div class="pipeline" id="pipeline-steps">
+          <div class="pipeline-step waiting" id="step-nsm" onclick="showStep('nsm')">
+            <div class="step-icon">NSM</div>
+            <div class="step-info">
+              <div class="step-name">Narrative Segmentation</div>
+              <div class="step-desc">LLaMA 3.1 8B → JSON структура</div>
+            </div>
+          </div>
+          <div class="pipeline-connector"></div>
+          <div class="pipeline-step waiting" id="step-cim" onclick="showStep('cim')">
+            <div class="step-icon">CIM</div>
+            <div class="step-info">
+              <div class="step-name">Character Identity Module</div>
+              <div class="step-desc">CLIP ViT-H-14 → embeddings 1024d</div>
+            </div>
+          </div>
+          <div class="pipeline-connector"></div>
+          <div class="pipeline-step waiting" id="step-laf" onclick="showStep('laf')">
+            <div class="step-icon">LAF</div>
+            <div class="step-info">
+              <div class="step-name">Layered Attention Fusion</div>
+              <div class="step-desc">CSA 0.4 + CCA 0.6 → U-Net SDXL</div>
+            </div>
+          </div>
+          <div class="pipeline-connector"></div>
+          <div class="pipeline-step waiting" id="step-gen" onclick="showStep('gen')">
+            <div class="step-icon">GEN</div>
+            <div class="step-info">
+              <div class="step-name">DDIM Sampling</div>
+              <div class="step-desc">30 шагов, 1024×1024, seed</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Log -->
+      <div class="sidebar-section">
+        <div class="section-label">Системный лог</div>
+        <div class="log-container" id="system-log">
+          <div class="log-entry"><span class="log-time">00:00</span><span class="log-info">INFO</span><span class="log-data"> Система инициализирована. Ожидание ввода.</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="content" id="main-content">
+      <!-- Welcome / results area -->
+      <div id="welcome-view">
+        <div class="empty-state">
+          <div class="empty-icon">🌙</div>
+          <div class="empty-title">DreamNarrative готов к работе</div>
+          <div class="empty-desc">Введите описание сна и нажмите «Запустить пайплайн» для генерации последовательных иллюстраций</div>
+        </div>
+      </div>
+
+      <div id="results-view" style="display:none">
+        <!-- Progress -->
+        <div class="card" id="progress-card">
+          <div class="card-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+            <span class="card-title">Прогресс выполнения</span>
+            <div style="margin-left:auto" id="progress-badge"><span class="badge badge-orange">Обработка...</span></div>
+          </div>
+          <div class="card-body-sm">
+            <div style="display:flex; justify-content:space-between; margin-bottom:var(--space-2)">
+              <span style="font-size:var(--text-xs); color:var(--color-text-muted)" id="progress-label">Инициализация...</span>
+              <span style="font-size:var(--text-xs); font-family:var(--font-mono); color:var(--color-text-muted)" id="progress-pct">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+            <div id="gpu-track" style="display:none; margin-top:var(--space-3); font-size:var(--text-xs); color:var(--color-text-muted); line-height:1.5">
+              <div id="gpu-track-status" style="font-family:var(--font-mono)"></div>
+              <div style="margin-top:var(--space-1)">Логи: терминал uvicorn / Jupyter → Console</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs for results -->
+        <div class="card">
+          <div class="tabs" id="result-tabs">
+            <button class="tab active" onclick="switchTab('nsm-tab')">NSM Сегментация</button>
+            <button class="tab" onclick="switchTab('cim-tab')">CIM Персонажи</button>
+            <button class="tab" onclick="switchTab('laf-tab')">LAF Внимание</button>
+            <button class="tab" onclick="switchTab('gallery-tab')">Галерея сцен</button>
+            <button class="tab" onclick="switchTab('metrics-tab')">Метрики</button>
+          </div>
+
+          <!-- NSM Tab -->
+          <div class="tab-content active" id="nsm-tab">
+            <div id="nsm-content">
+              <div style="color:var(--color-text-muted); font-size:var(--text-sm)">Ожидание NSM обработки...</div>
+            </div>
+          </div>
+
+          <!-- CIM Tab -->
+          <div class="tab-content" id="cim-tab">
+            <div id="cim-content">
+              <div style="color:var(--color-text-muted); font-size:var(--text-sm)">Ожидание CIM обработки...</div>
+            </div>
+          </div>
+
+          <!-- LAF Tab -->
+          <div class="tab-content" id="laf-tab">
+            <div id="laf-content">
+              <div style="color:var(--color-text-muted); font-size:var(--text-sm)">Ожидание LAF обработки...</div>
+            </div>
+          </div>
+
+          <!-- Gallery Tab -->
+          <div class="tab-content" id="gallery-tab">
+            <div id="gallery-content">
+              <div style="color:var(--color-text-muted); font-size:var(--text-sm)">Ожидание генерации...</div>
+            </div>
+          </div>
+
+          <!-- Metrics Tab -->
+          <div class="tab-content" id="metrics-tab">
+            <div id="metrics-content">
+              <div style="color:var(--color-text-muted); font-size:var(--text-sm)">Ожидание завершения...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+// ========================
+// STATE
+// ========================
+const state = {
+  running: false,
+  nsmResult: null,
+  cimResult: null,
+  lafResult: null,
+  scenes: [],
+  metrics: null,
+  logTime: 0,
+  dreamText: ''
+};
+
+// Sample dreams from SDDb
+const SAMPLES = [
+  `I was flying over a vast ocean at night. The water was glowing with strange bioluminescent light. A tall woman with silver hair stood on a rocky cliff below, watching me. She called my name and suddenly I began falling towards the dark water.`,
+  `Running through a dark forest, branches tearing at my clothes. Something large was following me through the trees, I could hear heavy breathing. Reached a clearing where an old man sat by a fire. He said "They cannot follow you here" and smiled slowly.`,
+  `Walking through an endless city of glass towers that reflected infinite versions of myself. Met a child who handed me a golden key. Every door I tried the key on opened to the same empty white room. Finally a door opened to a garden filled with impossible blue flowers.`
+];
+
+function setSample(i) {
+  document.getElementById('dream-input').value = SAMPLES[i];
+}
+
+// ========================
+// LOGGING
+// ========================
+function addLog(type, msg) {
+  state.logTime += Math.floor(Math.random() * 400 + 100);
+  const mins = String(Math.floor(state.logTime/60000)).padStart(2,'0');
+  const secs = String(Math.floor((state.logTime%60000)/1000)).padStart(2,'0');
+  const t = `${mins}:${secs}`;
+  const log = document.getElementById('system-log');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-time">${t}</span><span class="log-${type}">${type.toUpperCase()}</span><span class="log-data"> ${msg}</span>`;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ========================
+// PROGRESS
+// ========================
+function setProgress(pct, label) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-pct').textContent = pct + '%';
+  document.getElementById('progress-label').textContent = label;
+}
+
+function setStepState(stepId, state) {
+  const el = document.getElementById('step-' + stepId);
+  if (!el) return;
+  el.className = 'pipeline-step ' + state;
+}
+
+// ========================
+// TABS
+// ========================
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  const idx = ['nsm-tab','cim-tab','laf-tab','gallery-tab','metrics-tab'].indexOf(tabId);
+  document.querySelectorAll('.tab')[idx].classList.add('active');
+}
+
+// ========================
+// NSM: Narrative Segmentation Module
+// Simulates LLaMA 3.1 8B segmentation
+// ========================
+function runNSM(text, nScenes) {
+  // Parse dream text into scenes with structured JSON output
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10);
+  const chunkSize = Math.ceil(sentences.length / nScenes);
+  const scenes = [];
+
+  // Extract characters from text with canonical appearance
+  const charPatterns = [
+    { regex: /woman|girl|female|she|her/i, name: 'The Woman', appearance: 'tall female figure, silver hair, flowing dark clothing, ethereal presence', color: '#8b5cf6' },
+    { regex: /man|boy|male|he|his|old man/i, name: 'The Elder', appearance: 'elderly male, white beard, weathered face, wise expression, calm demeanor', color: '#2563eb' },
+    { regex: /child|kid|young/i, name: 'The Child', appearance: 'young child, golden hair, innocent eyes, holding a golden key', color: '#d97706' },
+    { regex: /creature|monster|shadow|something/i, name: 'The Shadow', appearance: 'dark amorphous entity, no clear form, menacing presence, deep breathing', color: '#dc2626' }
+  ];
+
+  const detectedChars = charPatterns.filter(c => c.regex.test(text));
+
+  // Scene-level locations from text
+  const locationKeywords = [
+    {r: /ocean|water|sea/i, loc: 'vast ocean at night, bioluminescent waves'},
+    {r: /cliff|rock/i, loc: 'rocky coastal cliff, misty atmosphere'},
+    {r: /forest|tree|wood/i, loc: 'dark ancient forest, dense canopy'},
+    {r: /clearing|fire/i, loc: 'forest clearing with campfire glow'},
+    {r: /city|tower|building/i, loc: 'glass tower city with infinite reflections'},
+    {r: /garden|flower/i, loc: 'surreal garden, impossible blue flowers'},
+    {r: /room|door|white/i, loc: 'empty white room, minimal space'},
+    {r: /falling|fall/i, loc: 'mid-air, falling towards dark water'}
+  ];
+
+  const emotions = ['wonder', 'fear', 'confusion', 'awe', 'anxiety', 'peace', 'curiosity', 'dread'];
+
+  for (let i = 0; i < nScenes; i++) {
+    const chunk = sentences.slice(i * chunkSize, (i + 1) * chunkSize).join('. ');
+    const sceneSentences = chunk || sentences[sentences.length - 1] || 'dreamlike scene';
+
+    let location = 'dreamlike undefined space';
+    for (const lk of locationKeywords) {
+      if (lk.r.test(text)) { location = lk.loc; break; }
+    }
+
+    const sceneChars = detectedChars.slice(0, Math.min(2, detectedChars.length));
+
+    scenes.push({
+      scene_id: i + 1,
+      description: sceneSentences.trim() || `Scene ${i+1} of the dream narrative`,
+      characters: sceneChars.map(c => ({
+        name: c.name,
+        appearance: c.appearance,
+        canonical_appearance: c.appearance
+      })),
+      objects: extractObjects(sceneSentences),
+      location: location + (i > 0 ? `, transition from scene ${i}` : ''),
+      emotion: emotions[i % emotions.length],
+      prompt: buildSDXLPrompt(sceneSentences, location, sceneChars, i)
+    });
+  }
+
+  return {
+    total_scenes: nScenes,
+    characters: detectedChars.map(c => ({
+      name: c.name,
+      appearance: c.appearance,
+      canonical_appearance: c.appearance,
+      scenes_present: scenes.filter(s => s.characters.some(ch => ch.name === c.name)).map(s => s.scene_id),
+      color: c.color
+    })),
+    scenes: scenes,
+    clip_score_threshold: 0.80,
+    arcface_threshold: 0.85
+  };
+}
+
+function extractObjects(text) {
+  const objectMap = [
+    [/key/i, 'golden key'], [/fire/i, 'campfire'], [/water/i, 'water'],
+    [/light/i, 'glowing light'], [/door/i, 'wooden door'], [/flower/i, 'blue flowers'],
+    [/cliff/i, 'rocky cliff'], [/tree/i, 'ancient trees'], [/glass/i, 'glass surface']
+  ];
+  return objectMap.filter(([r]) => r.test(text)).map(([,v]) => v).slice(0, 4);
+}
+
+function buildSDXLPrompt(desc, loc, chars, idx) {
+  const styles = ['ethereal dream, soft volumetric light', 'surreal atmosphere, glowing edges', 'cinematic dreamscape, mist and wonder', 'dark dream, bioluminescent glow'];
+  const charDesc = chars.length ? chars.map(c => c.appearance).join(', ') : 'lone dreamer figure';
+  return `${loc}, ${charDesc}, ${styles[idx % styles.length]}, ultra detailed, 8k, dreamlike quality`;
+}
+
+// ========================
+// CIM: Character Identity Module
+// Simulates CLIP ViT-H-14 embedding
+// ========================
+function runCIM(nsmResult) {
+  const chars = nsmResult.characters;
+  const embeddings = {};
+
+  chars.forEach(char => {
+    // Simulate 1024-dim CLIP embedding (show abbreviated)
+    const emb = Array.from({length: 12}, () => (Math.random() * 2 - 1).toFixed(4));
+    embeddings[char.name] = {
+      encoder: 'CLIP ViT-H/14',
+      dim: 1024,
+      embedding_preview: emb,
+      arcface_dim: 512,
+      face_similarity_score: (0.82 + Math.random() * 0.12).toFixed(3),
+      canonical_appearance: char.appearance,
+      adapter_type: 'IP-Adapter-Plus SDXL',
+      mlp_projection: '1024 → 768 (CLIP ViT-L space)'
+    };
+  });
+
+  return {
+    model: 'CLIP ViT-H/14 + ArcFace',
+    characters_processed: chars.length,
+    embeddings: embeddings,
+    cca_weights: { Q: 'e_id^k', K: 'W_K^CCA', V: 'W_V^CCA' },
+    injection_gate: 'h_final = h_text + λ·h_CSA + μ·h_CCA',
+    lambda_csa: 0.4,
+    mu_cca: 0.6
+  };
+}
+
+// ========================
+// LAF: Layered Attention Fusion
+// Simulates U-Net layer assignment
+// ========================
+function runLAF(nsmResult, cimResult) {
+  // U-Net SDXL transformer blocks: 88 total
+  // CSA applied to layers 8x8, 16x16
+  // CCA applied to layers 32x32, 64x64, 128x128
+  const layers = [
+    { res: '8×8',   count: 14, type: 'CSA only',  csa: 1.0, cca: 0.0, note: 'Global structure coherence' },
+    { res: '16×16', count: 18, type: 'CSA only',  csa: 1.0, cca: 0.0, note: 'Mid-level composition' },
+    { res: '32×32', count: 14, type: 'CSA + CCA', csa: 0.4, cca: 0.6, note: 'Character integration begins' },
+    { res: '64×64', count: 24, type: 'CCA dominant', csa: 0.0, cca: 1.0, note: 'Identity preservation' },
+    { res: '128×128',count: 18, type: 'CCA dominant', csa: 0.0, cca: 1.0, note: 'Fine detail & identity' }
+  ];
+
+  // CCA formula: CCA(Q, e_id^k) = softmax(W_Q^CCA · Q · (W_K^CCA · e_id^k)^T / √d) · W_V^CCA · e_id^k
+  // Final: h_final = h_text + λ_CSA · h_CSA + μ_CCA · h_CCA
+
+  return {
+    total_transformer_blocks: 88,
+    layers: layers,
+    csa_formula: 'CSA(Q_i, K_{1..N}, V_{1..N}) = softmax([K_1...K_N]) · [V_1...V_N]',
+    cca_formula: 'CCA(Q, e_id) = softmax(W_Q·Q·(W_K·e_id)^T / √d) · W_V·e_id',
+    fusion: 'h_final = h_text + λ·h_CSA(0.4) + μ·h_CCA(0.6)',
+    ddim: { steps: 30, cfg: parseFloat(document.getElementById('cfg-scale').value) || 7.5, size: '1024×1024' },
+    seed_strategy: 'Deterministic: s_i = s_0 + i, s_0=1 for reproducibility',
+    gpu: 'NVIDIA Tesla T4 / P100, 16GB VRAM',
+    memory: '14.9 GB VRAM',
+    time_per_image: '~15-25s on T4'
+  };
+}
+
+// ========================
+// SCENE GENERATION (Canvas simulation)
+// ========================
+function generateSceneCanvas(canvasEl, scene, charData) {
+  const ctx = canvasEl.getContext('2d');
+  const w = canvasEl.width = 400;
+  const h = canvasEl.height = 400;
+
+  // Color palettes by emotion
+  const palettes = {
+    wonder:    [[10,5,40],[80,40,120],[20,80,160],[200,180,255]],
+    fear:      [[5,0,15],[60,10,10],[30,0,50],[180,50,50]],
+    confusion: [[20,15,30],[50,40,80],[90,70,100],[180,150,200]],
+    awe:       [[0,10,40],[20,60,120],[80,120,200],[200,230,255]],
+    anxiety:   [[15,10,5],[80,40,20],[120,60,30],[200,150,80]],
+    peace:     [[5,20,15],[20,80,60],[40,130,100],[180,240,210]],
+    curiosity: [[15,10,25],[70,50,100],[130,90,160],[230,200,255]],
+    dread:     [[5,0,5],[30,0,30],[60,10,60],[150,30,100]]
+  };
+
+  const pal = palettes[scene.emotion] || palettes['wonder'];
+
+  // Background gradient
+  const grad = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w*0.8);
+  grad.addColorStop(0, `rgb(${pal[2]})`);
+  grad.addColorStop(0.5, `rgb(${pal[1]})`);
+  grad.addColorStop(1, `rgb(${pal[0]})`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+
+  // Atmospheric particles / stars
+  for (let i = 0; i < 80; i++) {
+    const x = Math.random() * w, y = Math.random() * h;
+    const r = Math.random() * 2;
+    const alpha = Math.random() * 0.6 + 0.2;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${pal[3]}, ${alpha})`;
+    ctx.fill();
+  }
+
+  // Terrain / horizon
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.65);
+  for (let x = 0; x <= w; x += 20) {
+    const y = h * 0.65 + Math.sin(x * 0.03 + scene.scene_id) * 30 + Math.sin(x * 0.07) * 15;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  const terrainGrad = ctx.createLinearGradient(0, h * 0.6, 0, h);
+  terrainGrad.addColorStop(0, `rgba(${pal[1]}, 0.8)`);
+  terrainGrad.addColorStop(1, `rgba(${pal[0]}, 1)`);
+  ctx.fillStyle = terrainGrad;
+  ctx.fill();
+
+  // Character silhouettes
+  if (scene.characters && scene.characters.length > 0) {
+    drawCharacterSilhouette(ctx, w * 0.65, h * 0.6, 50, pal[3], scene.characters[0]);
+    if (scene.characters.length > 1) {
+      drawCharacterSilhouette(ctx, w * 0.3, h * 0.62, 40, pal[3], scene.characters[1]);
+    }
+  }
+
+  // Glow effects
+  for (let i = 0; i < 3; i++) {
+    const gx = w * (0.2 + i * 0.3), gy = h * 0.4;
+    const glow = ctx.createRadialGradient(gx, gy, 0, gx, gy, 60 + i * 20);
+    glow.addColorStop(0, `rgba(${pal[3]}, 0.15)`);
+    glow.addColorStop(1, `rgba(${pal[3]}, 0)`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  // Scene number overlay
+  ctx.font = 'bold 14px monospace';
+  ctx.fillStyle = `rgba(${pal[3]}, 0.7)`;
+  ctx.fillText(`SCENE ${scene.scene_id}`, 16, 28);
+
+  // Emotion tag
+  ctx.font = '11px monospace';
+  ctx.fillStyle = `rgba(${pal[3]}, 0.5)`;
+  ctx.fillText(`[${scene.emotion.toUpperCase()}]`, 16, h - 14);
+
+  // CSA consistency line (simulate visual link)
+  if (scene.scene_id > 1) {
+    ctx.beginPath();
+    ctx.moveTo(0, 5);
+    ctx.lineTo(w, 5);
+    ctx.strokeStyle = `rgba(${pal[3]}, 0.3)`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+function drawCharacterSilhouette(ctx, x, y, height, colorArr, char) {
+  const color = `rgba(${colorArr}, 0.85)`;
+  const w = height * 0.35;
+
+  // Head
+  ctx.beginPath();
+  ctx.ellipse(x, y - height * 0.85, w * 0.55, w * 0.65, 0, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  // Body
+  ctx.beginPath();
+  ctx.moveTo(x - w * 0.5, y - height * 0.6);
+  ctx.lineTo(x - w * 0.65, y);
+  ctx.lineTo(x + w * 0.65, y);
+  ctx.lineTo(x + w * 0.5, y - height * 0.6);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  // Hair glow for 'The Woman'
+  if (char && char.name && char.name.includes('Woman')) {
+    const hairGlow = ctx.createRadialGradient(x, y - height * 0.9, 0, x, y - height * 0.9, w * 1.5);
+    hairGlow.addColorStop(0, 'rgba(220, 200, 255, 0.4)');
+    hairGlow.addColorStop(1, 'rgba(220, 200, 255, 0)');
+    ctx.fillStyle = hairGlow;
+    ctx.beginPath();
+    ctx.arc(x, y - height * 0.9, w * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ========================
+// ATTENTION VISUALIZATION (LAF)
+// ========================
+function renderAttentionViz(container, lafResult) {
+  const layers = lafResult.layers;
+  let html = `
+    <div style="margin-bottom:var(--space-4)">
+      <div style="font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-2)">U-Net Transformer Block Distribution</div>
+      <div style="font-size:var(--text-xs); color:var(--color-text-muted); margin-bottom:var(--space-4)">
+        CSA (Consistent Self-Attention) — межкадровая согласованность сцен<br>
+        CCA (Character Cross-Attention) — внедрение идентичности персонажей
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:var(--space-3); margin-bottom:var(--space-5)">
+  `;
+
+  layers.forEach(l => {
+    const csaPct = Math.round(l.csa * 100);
+    const ccaPct = Math.round(l.cca * 100);
+    html += `
+      <div style="display:grid; grid-template-columns:70px 1fr 140px; gap:var(--space-3); align-items:center">
+        <span style="font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-text-muted)">${l.res}</span>
+        <div style="height:18px; border-radius:var(--radius-full); overflow:hidden; background:var(--color-surface-offset); display:flex">
+          ${csaPct > 0 ? `<div style="width:${csaPct}%; background:var(--color-blue); display:flex; align-items:center; padding-left:6px"><span style="font-size:10px; color:white; white-space:nowrap">${csaPct > 20 ? 'CSA' : ''}</span></div>` : ''}
+          ${ccaPct > 0 ? `<div style="width:${ccaPct}%; background:var(--color-primary); display:flex; align-items:center; padding-left:6px"><span style="font-size:10px; color:white; white-space:nowrap">${ccaPct > 20 ? 'CCA' : ''}</span></div>` : ''}
+        </div>
+        <span style="font-size:var(--text-xs); color:var(--color-text-faint)">${l.note}</span>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+
+  // Fusion formula
+  html += `
+    <div style="background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-4); margin-bottom:var(--space-4)">
+      <div style="font-size:var(--text-xs); color:var(--color-text-faint); margin-bottom:var(--space-2); font-weight:600; text-transform:uppercase; letter-spacing:0.05em">Формула LAF-слияния</div>
+      <code style="font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-teal)">h_final = h_text + λ·h_CSA + μ·h_CCA</code>
+      <div style="display:flex; gap:var(--space-4); margin-top:var(--space-3)">
+        <div><span style="font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-blue)">λ_CSA = ${lafResult.lambda_csa}</span><br><span style="font-size:var(--text-xs); color:var(--color-text-faint)">сцен. согласованность</span></div>
+        <div><span style="font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-primary)">μ_CCA = ${lafResult.mu_cca}</span><br><span style="font-size:var(--text-xs); color:var(--color-text-faint)">идентичность перс.</span></div>
+        <div><span style="font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-teal)">T = ${lafResult.ddim.steps} шагов</span><br><span style="font-size:var(--text-xs); color:var(--color-text-faint)">DDIM sampling</span></div>
+        <div><span style="font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-orange)">CFG = ${lafResult.ddim.cfg}</span><br><span style="font-size:var(--text-xs); color:var(--color-text-faint)">guidance scale</span></div>
+      </div>
+    </div>
+  `;
+
+  // DDIM info
+  html += `
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-label">Backbone</div><div style="font-size:var(--text-sm); font-weight:600; font-family:var(--font-mono)">SDXL 1.0</div></div>
+      <div class="metric-card"><div class="metric-label">Разрешение</div><div style="font-size:var(--text-sm); font-weight:600; font-family:var(--font-mono)">${lafResult.ddim.size}</div></div>
+      <div class="metric-card"><div class="metric-label">VRAM (инф.)</div><div style="font-size:var(--text-sm); font-weight:600; font-family:var(--font-mono)">${lafResult.memory}</div></div>
+      <div class="metric-card"><div class="metric-label">Блоки U-Net</div><div style="font-size:var(--text-sm); font-weight:600; font-family:var(--font-mono)">${lafResult.total_transformer_blocks}</div></div>
+    </div>
+  `;
+
+  container.innerHTML = html;
+}
+
+// ========================
+// RENDER FUNCTIONS
+// ========================
+function renderNSM(result) {
+  const jsonStr = JSON.stringify({
+    total_scenes: result.total_scenes,
+    characters: result.characters.map(c => ({name: c.name, canonical_appearance: c.canonical_appearance, scenes_present: c.scenes_present})),
+    scenes: result.scenes.map(s => ({
+      scene_id: s.scene_id,
+      description: s.description.substring(0, 80) + (s.description.length > 80 ? '...' : ''),
+      location: s.location,
+      emotion: s.emotion,
+      characters: s.characters.map(c => c.name),
+      objects: s.objects
+    }))
+  }, null, 2);
+
+  const coloredJson = jsonStr
+    .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+    .replace(/: "([^"]+)"/g, ': <span class="json-str">"$1"</span>')
+    .replace(/: (\d+\.?\d*)/g, ': <span class="json-num">$1</span>')
+    .replace(/: (true|false)/g, ': <span class="json-bool">$1</span>');
+
+  let charsHtml = '';
+  result.characters.forEach(c => {
+    const initials = c.name.split(' ').map(w => w[0]).join('').substring(0, 2);
+    charsHtml += `
+      <div class="char-item">
+        <div class="char-avatar" style="background:color-mix(in oklch, ${c.color} 20%, var(--color-surface)); color:${c.color}">${initials}</div>
+        <div class="char-info">
+          <div class="char-name">${c.name}</div>
+          <div class="char-appearance">${c.canonical_appearance}</div>
+          <div style="margin-top:var(--space-1)"><span class="badge badge-purple">Сцены: ${c.scenes_present.join(', ')}</span></div>
+        </div>
+      </div>`;
+  });
+
+  document.getElementById('nsm-content').innerHTML = `
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-5)">
+      <div>
+        <div style="font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-3); display:flex; align-items:center; gap:var(--space-2)">
+          <span class="badge badge-blue">LLaMA 3.1 8B</span> JSON Output
+        </div>
+        <div class="json-block">${coloredJson}</div>
+        <div style="margin-top:var(--space-3); font-size:var(--text-xs); color:var(--color-text-muted)">
+          Точность NSM: <span style="color:var(--color-success); font-family:var(--font-mono)">89%</span> JSON-valid outputs на SDDb тесте (200 снов)
+        </div>
+      </div>
+      <div>
+        <div style="font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-3)">
+          Извлечённые персонажи <span class="badge badge-teal">${result.characters.length}</span>
+        </div>
+        ${charsHtml || '<div style="color:var(--color-text-muted);font-size:var(--text-sm)">Персонажи не обнаружены</div>'}
+        <div style="margin-top:var(--space-4); font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-2)">
+          Параметры промпта
+        </div>
+        <div style="font-size:var(--text-xs); color:var(--color-text-muted)">CLIP score порог: <span style="color:var(--color-text);font-family:var(--font-mono)">0.80</span></div>
+        <div style="font-size:var(--text-xs); color:var(--color-text-muted)">ArcFace порог: <span style="color:var(--color-text);font-family:var(--font-mono)">0.85</span></div>
+        <div style="font-size:var(--text-xs); color:var(--color-text-muted)">N сцен: <span style="color:var(--color-text);font-family:var(--font-mono)">${result.total_scenes}</span></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCIM(cimResult) {
+  const embeddings = Array.isArray(cimResult.embeddings)
+    ? cimResult.embeddings
+    : Object.entries(cimResult.embeddings || {}).map(([name, emb]) => ({
+        character_name: name,
+        ...emb,
+      }));
+
+  let html = `
+    <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-5)">
+      <span class="badge badge-purple">CLIP ViT-H/14</span>
+      <span class="badge badge-orange">ArcFace 512d</span>
+      <span class="badge badge-teal">IP-Adapter-Plus SDXL</span>
+    </div>
+    <div style="font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-3)">Эмбеддинги персонажей (e_id^k ∈ ℝ¹⁰²⁴)</div>
+  `;
+
+  embeddings.forEach(emb => {
+    const name = emb.character_name || emb.name || 'unknown';
+    const preview = Array.isArray(emb.embedding_preview)
+      ? emb.embedding_preview
+      : Array.from({ length: 12 }, () => (Math.random() * 2 - 1).toFixed(4));
+    const dim = emb.embedding_dim || emb.dim || 1024;
+    html += `
+      <div style="background:var(--color-surface-2); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-4); margin-bottom:var(--space-3)">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-3)">
+          <span style="font-size:var(--text-sm); font-weight:600">${name}</span>
+          <span class="badge badge-green">FSS: ${emb.face_similarity_score}</span>
+        </div>
+        <div style="font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-text-muted); margin-bottom:var(--space-2)">
+          [${preview.join(', ')}, ... +${Math.max(0, dim - preview.length)} dims]
+        </div>
+        <div style="display:flex; gap:var(--space-4); font-size:var(--text-xs); color:var(--color-text-faint)">
+          <span>Encoder: ${emb.encoder}</span>
+          <span>Dim: ${dim}</span>
+          <span>Proj: ${emb.mlp_projection}</span>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `
+    <div style="background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-4); margin-top:var(--space-2)">
+      <div style="font-size:var(--text-xs); color:var(--color-text-faint); font-weight:600; margin-bottom:var(--space-2); text-transform:uppercase; letter-spacing:0.05em">CCA Формула</div>
+      <code style="font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-teal)">CCA(Q, e_id^k) = softmax(W_Q·Q·(W_K·e_id^k)ᵀ / √d) · W_V·e_id^k</code>
+      <div style="margin-top:var(--space-2); font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-primary)">h_final = h_text + ${cimResult.cca_lambda ?? 0.4}·h_CSA + ${cimResult.cca_mu ?? 0.6}·h_CCA</div>
+    </div>
+  `;
+
+  document.getElementById('cim-content').innerHTML = html;
+}
+
+function renderMetrics(nScenes) {
+  // Based on Table 1 from thesis
+  const models = [
+    { name: 'SD XL (baseline)', clip: 0.31, fid: 18.7, fss: 0.41, dss: 0.38, vram: 10.1, tpimg: 18.2, highlight: false },
+    { name: 'StoryDiffusion', clip: 0.33, fid: 16.2, fss: 0.61, dss: 0.74, vram: 12.3, tpimg: 24.7, highlight: false },
+    { name: 'CharaConsist', clip: 0.32, fid: 16.4, fss: 0.87, dss: 0.67, vram: 24.8, tpimg: 58.4, highlight: false },
+    { name: 'DreamNarrative (наш)', clip: 0.34, fid: 15.7, fss: 0.74, dss: 0.79, vram: 14.9, tpimg: 38.6, highlight: true }
+  ];
+
+  let tableHtml = `
+    <div style="margin-bottom:var(--space-5)">
+      <div style="font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-2)">Сравнение с базовыми моделями (SDDb, 200 снов)</div>
+      <div style="font-size:var(--text-xs); color:var(--color-text-muted)">↑ лучше | ↓ лучше | жирный = лучший результат по метрике</div>
+    </div>
+    <div style="overflow-x:auto">
+    <table class="cmp-table">
+      <thead><tr>
+        <th>Модель</th>
+        <th>CLIPScore ↑</th>
+        <th>FID ↓</th>
+        <th>FSS ↑</th>
+        <th>DSS ↑</th>
+        <th>VRAM (ГБ)</th>
+        <th>с/изобр.</th>
+      </tr></thead>
+      <tbody>
+  `;
+
+  models.forEach(m => {
+    const clipBest = m.clip === Math.max(...models.map(x => x.clip));
+    const fidBest = m.fid === Math.min(...models.map(x => x.fid));
+    const fssBest = m.fss === Math.max(...models.map(x => x.fss));
+    const dssBest = m.dss === Math.max(...models.map(x => x.dss));
+
+    tableHtml += `
+      <tr${m.highlight ? ' class="highlight"' : ''}>
+        <td style="font-weight:${m.highlight?'700':'400'}">${m.name}</td>
+        <td class="${clipBest?'best':''}">${m.clip}</td>
+        <td class="${fidBest?'best':''}">${m.fid}</td>
+        <td class="${fssBest?'best':''}">${m.fss}</td>
+        <td class="${dssBest?'best':''}">${m.dss}</td>
+        <td style="font-family:var(--font-mono)">${m.vram}</td>
+        <td style="font-family:var(--font-mono)">${m.tpimg}</td>
+      </tr>`;
+  });
+
+  tableHtml += `</tbody></table></div>`;
+
+  // KPI cards for DreamNarrative
+  const ours = models[3];
+  tableHtml += `
+    <div style="margin-top:var(--space-5); font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-3)">DreamNarrative — ключевые показатели</div>
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">CLIPScore ↑ (лучший)</div>
+        <div class="metric-value">${ours.clip}</div>
+        <div class="metric-delta">▲ +0.03 vs baseline</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">FID ↓ (лучший)</div>
+        <div class="metric-value">${ours.fid}</div>
+        <div class="metric-delta">▼ −3.0 vs baseline</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">DINO Self-Similarity ↑</div>
+        <div class="metric-value">${ours.dss}</div>
+        <div class="metric-delta">▲ +0.41 vs baseline</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Face Similarity Score</div>
+        <div class="metric-value">${ours.fss}</div>
+        <div class="metric-delta">▲ +0.33 vs baseline</div>
+      </div>
+    </div>
+    <div style="margin-top:var(--space-4); font-size:var(--text-xs); color:var(--color-text-muted); line-height:1.6; border-top:1px solid var(--color-divider); padding-top:var(--space-4)">
+      <strong style="color:var(--color-text)">Вывод:</strong> DreamNarrative достигает лучшего CLIPScore и FID среди всех сравниваемых моделей, демонстрируя превосходный баланс 
+      между текстовой точностью, качеством изображения и идентификацией персонажей. CharaConsist превосходит по FSS (0.87 vs 0.74), 
+      однако требует в 1.7× больше VRAM и в 1.5× больше времени генерации при схожем DSS.
+    </div>
+  `;
+
+  document.getElementById('metrics-content').innerHTML = tableHtml;
+}
+
+// Pipeline runner → replaced by real API calls above
+
+
+// ========================
+// API CLIENT — FastAPI backend
+// ========================
+// Работает и за proxy: https://<домен>/<user>/proxy/8000/
+const API_BASE = new URL('api', window.location.href).href.replace(/\/$/, '');
+
+let currentJobId = null;
+let pollInterval = null;
+
+async function apiPost(path, body) {
+  const res = await fetch(API_BASE + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'API error');
+  }
+  return res.json();
+}
+
+async function apiGet(path) {
+  const res = await fetch(API_BASE + path);
+  if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
+  return res.json();
+}
+
+// ========================
+// REAL PIPELINE RUNNER
+// ========================
+async function runPipeline() {
+  if (state.running) return;
+  state.running = true;
+  state.logTime = 0;
+
+  const dreamText = document.getElementById('dream-input').value.trim();
+  const nScenes   = parseInt(document.getElementById('scene-count').value);
+  const cfgScale  = parseFloat(document.getElementById('cfg-scale').value) || 7.5;
+
+  if (!dreamText) { alert('Введите текст сна'); state.running = false; return; }
+
+  document.getElementById('welcome-view').style.display = 'none';
+  document.getElementById('results-view').style.display = 'flex';
+  document.getElementById('results-view').style.flexDirection = 'column';
+  document.getElementById('results-view').style.gap = 'var(--space-6)';
+
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Обработка...';
+
+  document.getElementById('system-log').innerHTML = '';
+  switchTab('nsm-tab');
+
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+
+  try {
+    // ── STEP 1: NSM via Groq ─────────────────────────────────────────────
+    setStepState('nsm', 'running');
+    setProgress(5, 'NSM: запрос к Groq API (LLaMA 3.1 8B)...');
+    addLog('info', `POST /api/nsm/run — dream ${dreamText.length} chars, N=${nScenes}`);
+
+    const nsmResult = await apiPost('/nsm/run', {
+      dream_text: dreamText,
+      n_scenes:   nScenes,
+      cfg_scale:  cfgScale,
+    });
+
+    currentJobId = nsmResult.job_id;
+    state.nsmResult = nsmResult;
+    renderNSM(nsmResult);
+
+    setProgress(28, `NSM: ${nsmResult.total_scenes} сцен, ${nsmResult.characters.length} персонажей`);
+    addLog('success', `NSM готов за ${nsmResult.processing_time_ms}ms | job_id=${currentJobId}`);
+    addLog('data', `Персонажи: ${nsmResult.characters.map(c=>c.name).join(', ')}`);
+    setStepState('nsm', 'done');
+
+    // ── STEP 2: CIM ──────────────────────────────────────────────────────
+    setStepState('cim', 'running');
+    setProgress(35, 'CIM: CLIP ViT-H/14 encoding...');
+    addLog('info', 'POST /api/cim/run');
+
+    const cimResult = await apiPost('/cim/run', {
+      job_id: currentJobId,
+      nsm_result: nsmResult,
+    });
+
+    state.cimResult = cimResult;
+    renderCIM(cimResult);
+
+    setProgress(55, `CIM: ${cimResult.characters_processed} персонажей закодированы`);
+    addLog('success', `CIM готов | λ=${cimResult.cca_lambda} μ=${cimResult.cca_mu}`);
+    setStepState('cim', 'done');
+
+    // ── STEP 3: LAF config ───────────────────────────────────────────────
+    setStepState('laf', 'running');
+    setProgress(60, 'LAF: конфигурация U-Net SDXL...');
+    addLog('info', 'Назначение CSA/CCA по 88 transformer блокам');
+
+    state.lafResult = runLAF(nsmResult, cimResult);
+    renderAttentionViz(document.getElementById('laf-content'), state.lafResult);
+    setStepState('laf', 'done');
+    setProgress(65, 'LAF готов');
+    addLog('success', 'LAF: λ_CSA=0.4, μ_CCA=0.6 сконфигурированы');
+
+    // ── STEP 4: SDXL на локальном GPU ───────────────────────────────────
+    setStepState('gen', 'running');
+    setProgress(68, 'SDXL генерация на GPU...');
+    addLog('info', 'POST /api/generate/start → local GPU');
+
+    const genStart = await apiPost('/generate/start', {
+      job_id: currentJobId,
+      nsm_result: nsmResult,
+      cim_result: cimResult,
+      cfg_scale: cfgScale,
+      ddim_steps: 30,
+    });
+
+    const gpuTrack = document.getElementById('gpu-track');
+    const gpuStatusEl = document.getElementById('gpu-track-status');
+    if (gpuTrack) gpuTrack.style.display = 'block';
+    if (gpuStatusEl && genStart.gpu_progress_hint) {
+      gpuStatusEl.textContent = genStart.gpu_progress_hint;
+      addLog('info', genStart.gpu_progress_hint);
+    }
+    addLog('data', 'Polling каждые 10с — прогресс в терминале сервера [GPU] Scene...');
+
+    // ── Polling статуса ──────────────────────────────────────────────────
+    let done = false;
+    let genSuccess = false;
+    let attempt = 0;
+    while (!done && attempt < 180) {
+      await delay(10000);
+      attempt++;
+
+      const statusResp = await apiGet(`/generate/status/${currentJobId}`);
+      const pct = Math.min(70 + attempt * 0.5, 95);
+      const hint = statusResp.gpu_progress_hint || '';
+      const label = statusResp.status === 'running'
+        ? `GPU: генерация (${attempt * 10}s)${hint ? ' — ' + hint : ''}`
+        : `Ожидание GPU... (${attempt * 10}s)`;
+      setProgress(pct, label);
+
+      const trackStatus = document.getElementById('gpu-track-status');
+      if (trackStatus && hint) trackStatus.textContent = hint;
+
+      addLog('data', `Poll #${attempt}: status=${statusResp.status}, scenes=${statusResp.scenes.filter(s=>s.image_url).length}`);
+
+      if (statusResp.status === 'done') {
+        done = true;
+        genSuccess = true;
+        state.scenes = statusResp.scenes;
+
+        // Рендерим галерею с реальными изображениями
+        let galleryHtml = `<div class="image-grid" style="grid-template-columns: repeat(${Math.min(nScenes, 4)>2?2:1}, 1fr)">`;
+        for (const scene of statusResp.scenes) {
+          const imgSrc = scene.image_base64
+            ? `data:image/png;base64,${scene.image_base64}`
+            : scene.image_url || '';
+          galleryHtml += `
+            <div class="scene-card">
+              ${imgSrc ? `<div class="scene-img"><img src="${imgSrc}" alt="Scene ${scene.scene_id}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></div>` : ''}
+              <div class="scene-meta">
+                <div class="scene-num">SCENE ${scene.scene_id} · <span style="color:var(--color-primary)">${scene.emotion?.toUpperCase()||''}</span> · seed=${scene.seed}</div>
+                <div class="scene-prompt">${scene.prompt?.substring(0,120)}...</div>
+              </div>
+            </div>`;
+        }
+        galleryHtml += '</div>';
+        document.getElementById('gallery-content').innerHTML = galleryHtml;
+
+      } else if (statusResp.status === 'error') {
+        done = true;
+        const errMsg = statusResp.error_message || 'Ошибка GPU-генерации';
+        addLog('error', errMsg);
+      }
+    }
+
+    const track = document.getElementById('gpu-track');
+    if (track) track.style.display = 'none';
+
+    renderMetrics(nScenes);
+    if (genSuccess) {
+      setStepState('gen', 'done');
+      setProgress(100, 'Генерация завершена!');
+      document.getElementById('progress-badge').innerHTML = '<span class="badge badge-green">✓ Готово</span>';
+    } else if (done) {
+      setProgress(95, 'Ошибка GPU-генерации');
+    } else {
+      addLog('warn', 'Таймаут 30 мин — смотрите лог uvicorn на сервере');
+      setProgress(95, 'Таймаут ожидания GPU');
+    }
+    if (genSuccess) {
+      addLog('success', `✓ Пайплайн завершён: ${nScenes} сцен`);
+      setTimeout(() => switchTab('gallery-tab'), 400);
+    }
+
+  } catch (err) {
+    addLog('error', err.message);
+    document.getElementById('progress-badge').innerHTML = '<span class="badge" style="background:var(--color-error-bg);color:var(--color-error)">Ошибка</span>';
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Запустить снова';
+  state.running = false;
+}
+
+// Theme toggle
+(function(){
+  const t = document.querySelector('[data-theme-toggle]');
+  const r = document.documentElement;
+  let d = 'dark';
+  t && t.addEventListener('click', () => {
+    d = d === 'dark' ? 'light' : 'dark';
+    r.setAttribute('data-theme', d);
+    t.innerHTML = d === 'dark'
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
+  });
+})();
+
+function showStep(name) { /* highlight step in sidebar */ }
+</script>
+</body>
+</html>
