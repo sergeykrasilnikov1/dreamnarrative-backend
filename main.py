@@ -13,7 +13,12 @@ async def lifespan(app: FastAPI):
     from app.services.gpu_inference_service import gpu_status
 
     gpu = gpu_status()
-    print(f"DreamNarrative API — Groq: {settings.GROQ_API_KEY[:8]}...")
+    llm_label = (
+        f"{settings.LLM_PROVIDER}:{settings.LLM_MODEL_ID}"
+        if settings.LLM_PROVIDER == "local"
+        else f"{settings.LLM_PROVIDER}:{settings.LLM_MODEL}"
+    )
+    print(f"DreamNarrative API — LLM: {llm_label}")
     print(f"SDXL backend: local GPU — {gpu.get('progress_hint', 'n/a')}")
     yield
     print("Shutdown.")

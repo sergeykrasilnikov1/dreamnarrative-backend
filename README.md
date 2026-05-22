@@ -19,7 +19,9 @@ cd dreamnarrative-backend
 
 ```bash
 cp .env.example .env
-# GROQ_API_KEY=gsk_...   ← https://console.groq.com
+# По умолчанию LLM на GPU без VPN:
+# LLM_PROVIDER=local
+# LLM_MODEL_ID=Qwen/Qwen3.5-4B
 ```
 
 ### 3. Установите зависимости и запустите
@@ -59,11 +61,21 @@ dreamnarrative-backend/
 └── static/index.html         # UI
 ```
 
+## LLM для NSM (без Groq / VPN)
+
+| `LLM_PROVIDER` | Описание |
+|----------------|----------|
+| `local` | **По умолчанию.** Qwen3.5-4B на GPU сервера, затем выгрузка → SDXL |
+| `openai` | Ollama / vLLM: `LLM_BASE_URL=http://127.0.0.1:11434/v1` |
+| `groq` | Groq API (нужен VPN) |
+
+Первый запуск `local` скачает модель с HuggingFace (~9 GB). Нужен `transformers>=4.52`.
+
 ## API
 
 | Method | Path | Описание |
 |--------|------|----------|
-| POST | `/api/nsm/run` | NSM (Groq) |
+| POST | `/api/nsm/run` | NSM (LLM) |
 | POST | `/api/cim/run` | CIM |
 | POST | `/api/generate/start` | SDXL на GPU |
 | GET | `/api/generate/status/{job_id}` | Статус |

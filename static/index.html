@@ -305,7 +305,7 @@ textarea { min-height: 100px; }
             <div class="step-icon">NSM</div>
             <div class="step-info">
               <div class="step-name">Narrative Segmentation</div>
-              <div class="step-desc">LLaMA 3.1 8B → JSON структура</div>
+              <div class="step-desc">LLM → JSON структура</div>
             </div>
           </div>
           <div class="pipeline-connector"></div>
@@ -878,7 +878,7 @@ function renderNSM(result) {
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-5)">
       <div>
         <div style="font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-3); display:flex; align-items:center; gap:var(--space-2)">
-          <span class="badge badge-blue">LLaMA 3.1 8B</span> JSON Output
+          <span class="badge badge-blue">LLM</span> JSON Output
         </div>
         <div class="json-block">${coloredJson}</div>
         <div style="margin-top:var(--space-3); font-size:var(--text-xs); color:var(--color-text-muted)">
@@ -1099,7 +1099,7 @@ async function runPipeline() {
   try {
     // ── STEP 1: NSM via Groq ─────────────────────────────────────────────
     setStepState('nsm', 'running');
-    setProgress(5, 'NSM: запрос к Groq API (LLaMA 3.1 8B)...');
+    setProgress(5, 'NSM: LLM сегментация...');
     addLog('info', `POST /api/nsm/run — dream ${dreamText.length} chars, N=${nScenes}`);
 
     const nsmResult = await apiPost('/nsm/run', {
