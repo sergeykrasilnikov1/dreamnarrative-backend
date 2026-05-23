@@ -53,8 +53,6 @@ def build_scene_char_indices(
     """Для каждой сцены — индексы персонажей в char_embeddings."""
     ordered = sorted(nsm_result.get("scenes", []), key=lambda s: int(s.get("scene_id", 0)))
     out: list[list[int]] = []
-    all_idx = list(range(len(name_to_idx)))
-
     for scene in ordered:
         indices: list[int] = []
         for name in scene.get("characters") or []:
@@ -63,7 +61,7 @@ def build_scene_char_indices(
             name = str(name).strip()
             if name in name_to_idx and name_to_idx[name] not in indices:
                 indices.append(name_to_idx[name])
-        out.append(indices if indices else all_idx)
+        out.append(indices)
     return out
 
 

@@ -109,8 +109,9 @@ def _global_character_description(nsm: dict) -> str:
     return ", ".join(parts) if parts else "person in a dream"
 
 
-def _build_prompts(nsm: dict) -> list[tuple[int, str]]:
-    """(scene_id, sdxl_prompt от LLM) в порядке сцен."""
+def _build_prompts(nsm: dict, enrich_characters: bool = False) -> list[tuple[int, str]]:
+    """(scene_id, sdxl_prompt) — опционально префикс canonical_appearance персонажей сцены."""
+    lookup = _char_lookup(nsm)
     ordered = sorted(nsm.get("scenes", []), key=lambda s: int(s.get("scene_id", 0)))
     out: list[tuple[int, str]] = []
 
@@ -119,6 +120,18 @@ def _build_prompts(nsm: dict) -> list[tuple[int, str]]:
         prompt = (scene.get("sdxl_prompt") or scene.get("description") or scene.get("location", "")).strip()
         if not prompt:
             raise ValueError(f"Сцена {scene_id}: пустой sdxl_prompt")
+
+        if enrich_characters and lookup:
+            char_bits: list[str] = []
+            for raw in scene.get("characters") or []:
+                name = raw.get("name", raw) if isinstance(raw, dict) else str(raw)
+                name = str(name).strip()
+                desc = lookup.get(name, "")
+                if desc and desc.lower() not in prompt.lower():
+                    char_bits.append(desc)
+            if char_bits:
+                prompt = f"{', '.join(char_bits)}, {prompt}"
+
         out.append((scene_id, prompt))
 
     return out
@@ -139,7 +152,8 @@ def run_storydiffusion_generation(
     _storydiffusion_root()
     pipe, device = _get_pipeline()
 
-    scene_prompts = _build_prompts(nsm_result)
+    enrich = settings.ENABLE_LAF
+    scene_prompts = _build_prompts(nsm_result, enrich_characters=enrich)
     if not scene_prompts:
         raise ValueError("NSM не содержит сцен для генерации")
     if len(scene_prompts) < settings.NSM_MIN_SCENES:
@@ -180,9 +194,12 @@ def run_storydiffusion_generation(
     # ── LAF: CSA (StoryDiffusion) + CCA (CIM) ─────────────────────────────
     char_emb, name_to_idx = load_char_embeddings_from_cim(cim_result)
     scene_char_lists = build_scene_char_indices(nsm_result, name_to_idx)
-    lam = float(cim_result.get("cca_lambda", settings.LAF_LAMBDA_CSA))
     mu = float(cim_result.get("cca_mu", settings.LAF_MU_CCA))
-    use_laf = settings.ENABLE_LAF and char_emb.shape[0] > 0
+    use_laf_cca = (
+        settings.ENABLE_LAF
+        and settings.ENABLE_LAF_CCA
+        and char_emb.shape[0] > 0
+    )
 
     sd.write = True
     sd.cur_step = 0
@@ -190,13 +207,18 @@ def run_storydiffusion_generation(
     sd.mask1024 = None
     sd.mask4096 = None
 
-    if use_laf:
-        set_laf_attention_processors(pipe.unet, id_length, char_emb, lam, mu)
+    if use_laf_cca:
+        set_laf_attention_processors(
+            pipe.unet, id_length, char_emb, mu, enable_cca=True
+        )
         set_laf_batch_context(scene_char_lists, id_length)
-        print(f"[LAF] DreamNarrative: {char_emb.shape[0]} characters, batch={id_length}")
+        print(f"[LAF] CCA on — {char_emb.shape[0]} chars, batch={id_length}, μ={mu}")
     else:
         sd.set_attention_processor(pipe.unet, id_length, is_ipadapter=False)
-        print("[StoryDiffusion] LAF disabled — CSA only (no CIM embeddings)")
+        if enrich:
+            print("[LAF] CSA StoryDiffusion + промпты с canonical_appearance (CCA off)")
+        else:
+            print("[StoryDiffusion] CSA only")
 
     print(
         f"[StoryDiffusion] job={job_id} batch={id_length} scenes (single pass) "

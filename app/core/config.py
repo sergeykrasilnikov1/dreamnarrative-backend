@@ -63,8 +63,9 @@ class Settings(BaseSettings):
     CLIP_THRESHOLD: float = 0.80
     ARCFACE_THRESHOLD: float = 0.85
     LAF_LAMBDA_CSA: float = 0.4
-    LAF_MU_CCA: float = 0.6
-    ENABLE_LAF: bool = True
+    LAF_MU_CCA: float = 0.2  # низкий μ: CCA без IP-Adapter иначе ломает лица
+    ENABLE_LAF: bool = True  # обогащение промптов canonical_appearance из CIM
+    ENABLE_LAF_CCA: bool = False  # UNet CCA — только с эталонными фото / IP-Adapter
 
     # CIM — CLIP identity encoder
     CIM_CLIP_MODEL_ID: str = "openai/clip-vit-large-patch14"

@@ -1,12 +1,9 @@
 """
 Layered Attention Fusion (LAF) — гибрид CSA (StoryDiffusion) + CCA (CIM).
 
-По ВКР (раздел 5.4):
-  8×8, 16×16  — CSA only  (семантика)
-  32×32       — CSA + CCA (λ, μ)
-  64×64, 128×128 — CCA only (текстуры, детали лица)
-
-h_final = h_text + λ·h_CSA + μ·h_CCA  (на промежуточных слоях)
+Практика: полный CSA StoryDiffusion на всех up_blocks (главный источник
+согласованности). CCA в U-Net — только с ENABLE_LAF_CCA и низким μ (нужны
+эталонные фото + IP-Adapter; текстовые CLIP-эмбеддинги без обучения вредят).
 """
 from __future__ import annotations
 
@@ -15,7 +12,6 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import torch
-import torch.nn.functional as F
 from diffusers.models.attention_processor import AttnProcessor2_0 as AttnProcessor
 
 from app.services.storydiffusion_engine import SpatialAttnProcessor2_0
@@ -23,11 +19,10 @@ from app.services.storydiffusion_engine import SpatialAttnProcessor2_0
 
 @dataclass
 class LAFContext:
-    char_embeddings: Optional[torch.Tensor] = None  # [N, D] on CPU
+    char_embeddings: Optional[torch.Tensor] = None
     scene_char_indices: list[list[int]] = field(default_factory=list)
     num_scenes_batch: int = 1
-    lam_csa: float = 0.4
-    mu_cca: float = 0.6
+    mu_cca: float = 0.2
 
 
 laf_ctx = LAFContext()
@@ -39,7 +34,6 @@ def set_laf_batch_context(scene_char_indices: list[list[int]], num_scenes: int) 
 
 
 def _layer_zone(name: str) -> str:
-    """semantic | mid | texture | other"""
     if any(x in name for x in ("down_blocks.0", "mid_block", "up_blocks.3")):
         return "semantic"
     if any(x in name for x in ("down_blocks.1", "up_blocks.2")):
@@ -50,10 +44,9 @@ def _layer_zone(name: str) -> str:
 
 
 def _scene_idx_for_batch_row(batch_idx: int, batch_size: int, num_scenes: int) -> int:
-    """SDXL + CFG: batch часто 2×num_scenes (cond/uncond)."""
     if num_scenes <= 0:
         return 0
-    if batch_size >= 2 * num_scenes and batch_size % num_scenes == 0:
+    if batch_size >= 2 * num_scenes:
         return batch_idx % num_scenes
     if batch_size == num_scenes:
         return min(batch_idx, num_scenes - 1)
@@ -61,16 +54,25 @@ def _scene_idx_for_batch_row(batch_idx: int, batch_size: int, num_scenes: int) -
 
 
 class CCAProcessor(torch.nn.Module):
-    """
-    Character Cross-Attention (ВКР §3.3, §5.4).
-    CCA(Q, e_id) = softmax(Q·K_id^T / √d) · V_id
-    """
+    """Character Cross-Attention — только с ENABLE_LAF_CCA и маленьким μ."""
 
-    def __init__(self, mu: float = 0.6):
+    def __init__(self, mu: float = 0.2):
         super().__init__()
         self.mu = mu
         self.base = AttnProcessor()
+        self._proj_in: Optional[int] = None
+        self._proj_out: Optional[int] = None
         self.proj: Optional[torch.nn.Linear] = None
+
+    def _init_proj(self, in_dim: int, out_dim: int, device, dtype) -> None:
+        if self.proj is not None and self._proj_in == in_dim and self._proj_out == out_dim:
+            return
+        gen = torch.Generator(device="cpu").manual_seed(42)
+        self.proj = torch.nn.Linear(in_dim, out_dim, bias=False).to(device=device, dtype=dtype)
+        torch.nn.init.orthogonal_(self.proj.weight, generator=gen)
+        self.proj.weight.mul_(0.1)
+        self._proj_in = in_dim
+        self._proj_out = out_dim
 
     def _active_char_emb(
         self, hidden_states: torch.Tensor, batch_idx: int, batch_size: int
@@ -79,13 +81,10 @@ class CCAProcessor(torch.nn.Module):
         if emb is None or emb.numel() == 0:
             return None
 
-        num_scenes = laf_ctx.num_scenes_batch
-        scene_idx = _scene_idx_for_batch_row(batch_idx, batch_size, num_scenes)
-        indices = (
-            laf_ctx.scene_char_indices[scene_idx]
-            if scene_idx < len(laf_ctx.scene_char_indices)
-            else list(range(emb.shape[0]))
-        )
+        scene_idx = _scene_idx_for_batch_row(batch_idx, batch_size, laf_ctx.num_scenes_batch)
+        if scene_idx >= len(laf_ctx.scene_char_indices):
+            return None
+        indices = laf_ctx.scene_char_indices[scene_idx]
         if not indices:
             return None
         return emb[indices].to(hidden_states.device, dtype=hidden_states.dtype)
@@ -107,7 +106,7 @@ class CCAProcessor(torch.nn.Module):
         if emb is None or emb.numel() == 0:
             return h_text
 
-        bsz, seq_len, dim = h_text.shape
+        bsz, _, dim = h_text.shape
         h_cca = torch.zeros_like(h_text)
         any_active = False
 
@@ -116,18 +115,12 @@ class CCAProcessor(torch.nn.Module):
             if char_e is None or char_e.shape[0] == 0:
                 continue
             any_active = True
-            if self.proj is None or self.proj.in_features != char_e.shape[-1]:
-                self.proj = torch.nn.Linear(
-                    char_e.shape[-1], dim, bias=False
-                ).to(h_text.device, dtype=h_text.dtype)
-                torch.nn.init.xavier_uniform_(self.proj.weight)
-
-            char_proj = self.proj(char_e)  # [n_chars, dim]
+            self._init_proj(char_e.shape[-1], dim, h_text.device, h_text.dtype)
+            assert self.proj is not None
+            char_proj = self.proj(char_e)
             q = h_text[b : b + 1]
             scale = dim**-0.5
-            attn_w = torch.softmax(
-                q @ char_proj.transpose(-2, -1) * scale, dim=-1
-            )
+            attn_w = torch.softmax(q @ char_proj.transpose(-2, -1) * scale, dim=-1)
             h_cca[b : b + 1] = attn_w @ char_proj.unsqueeze(0)
 
         if any_active:
@@ -139,16 +132,14 @@ def set_laf_attention_processors(
     unet,
     id_length: int,
     char_embeddings: Optional[torch.Tensor],
-    lam_csa: float,
     mu_cca: float,
+    enable_cca: bool = False,
 ) -> None:
     """
-    Регистрирует LAF-процессоры на U-Net SDXL.
-    CSA: StoryDiffusion SpatialAttnProcessor2_0 на up_blocks.2/3 (семантика + mid).
-    CCA: CCAProcessor на attn2 mid + texture блоков.
+    CSA: все up_blocks attn1 — как оригинальный StoryDiffusion (не урезать!).
+    CCA: опционально на attn2 mid/texture.
     """
-    laf_ctx.char_embeddings = char_embeddings
-    laf_ctx.lam_csa = lam_csa
+    laf_ctx.char_embeddings = char_embeddings if enable_cca else None
     laf_ctx.mu_cca = mu_cca
 
     attn_procs = {}
@@ -159,31 +150,25 @@ def set_laf_attention_processors(
         is_cross = name.endswith("attn2.processor")
         zone = _layer_zone(name)
 
-        if is_self and "up_blocks" in name:
-            try:
-                block_id = int(name.split("up_blocks.")[1].split(".")[0])
-            except (IndexError, ValueError):
-                block_id = 0
-            # up_blocks.3, .2 — CSA (StoryDiffusion, семантика + mid)
-            if block_id >= 2:
-                attn_procs[name] = SpatialAttnProcessor2_0(
-                    id_length=id_length,
-                    device=unet.device,
-                    dtype=unet.dtype,
-                )
-                csa_count += 1
-            else:
-                attn_procs[name] = AttnProcessor()
+        if is_self and name.startswith("up_blocks"):
+            attn_procs[name] = SpatialAttnProcessor2_0(
+                id_length=id_length,
+                device=unet.device,
+                dtype=unet.dtype,
+            )
+            csa_count += 1
         elif is_self:
             attn_procs[name] = AttnProcessor()
-        elif is_cross and zone in ("mid", "texture"):
+        elif enable_cca and is_cross and zone in ("mid", "texture"):
             attn_procs[name] = CCAProcessor(mu=mu_cca)
             cca_count += 1
         else:
             attn_procs[name] = AttnProcessor()
 
     unet.set_attn_processor(copy.deepcopy(attn_procs))
-    print(
-        f"[LAF] processors: CSA={csa_count} (StoryDiffusion up_blocks≥2), "
-        f"CCA={cca_count} (attn2 mid/texture), λ={lam_csa}, μ={mu_cca}"
-    )
+    mode = f"CSA={csa_count} (all up_blocks)"
+    if enable_cca:
+        mode += f", CCA={cca_count} μ={mu_cca}"
+    else:
+        mode += ", CCA=off"
+    print(f"[LAF] {mode}")
