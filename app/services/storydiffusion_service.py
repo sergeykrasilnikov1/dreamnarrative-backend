@@ -58,7 +58,11 @@ def _get_pipeline():
         use_safetensors=True,
     )
     pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
-    pipe = pipe.to(_device)
+    pipe = pipe.to(_device, dtype=dtype)
+    # SDXL VAE upcasts to fp32 on 1st decode; 2nd pipe() then fails with Half/float bias mismatch.
+    if hasattr(pipe.vae, "config") and hasattr(pipe.vae.config, "force_upcast"):
+        pipe.vae.config.force_upcast = False
+    pipe.vae.to(dtype=dtype)
     pipe.enable_attention_slicing()
     try:
         pipe.enable_freeu(s1=0.6, s2=0.4, b1=1.1, b2=1.2)
@@ -71,6 +75,21 @@ def _get_pipeline():
 
     _pipe = pipe
     return _pipe, _device
+
+
+def _prepare_pipe_before_inference(pipe) -> None:
+    """Сброс dtype перед каждым pipe() — иначе 2-й вызов падает на VAE decode."""
+    import torch
+
+    dtype = torch.float16
+    if hasattr(pipe.vae, "config") and hasattr(pipe.vae.config, "force_upcast"):
+        pipe.vae.config.force_upcast = False
+    if pipe.vae.dtype != dtype:
+        pipe.vae.to(dtype=dtype)
+    for module in pipe.vae.modules():
+        if isinstance(module, torch.nn.Conv2d) and module.bias is not None:
+            if module.weight.dtype != dtype or module.bias.dtype != dtype:
+                module.to(dtype=dtype)
 
 
 def _char_lookup(nsm: dict) -> dict[str, str]:
@@ -154,6 +173,8 @@ def run_storydiffusion_generation(
     sd.write = True
     sd.cur_step = 0
     sd.attn_count = 0
+    sd.mask1024 = None
+    sd.mask4096 = None
     sd.set_attention_processor(pipe.unet, id_length, is_ipadapter=False)
 
     print(
@@ -162,6 +183,7 @@ def run_storydiffusion_generation(
     )
 
     with torch.inference_mode():
+        _prepare_pipe_before_inference(pipe)
         id_images = pipe(
             id_texts,
             num_inference_steps=ddim_steps,
@@ -177,18 +199,22 @@ def run_storydiffusion_generation(
     )
 
     sd.write = False
+    torch.cuda.empty_cache()
     for scene_id, prompt_text in scene_prompts[id_length:]:
         sd.cur_step = 0
+        sd.attn_count = 0
         styled = sd.apply_style_positive(style, prompt_text)
-        img = pipe(
-            styled,
-            num_inference_steps=ddim_steps,
-            guidance_scale=cfg_scale,
-            height=sd.height,
-            width=sd.width,
-            negative_prompt=negative_prompt,
-            generator=generator,
-        ).images[0]
+        with torch.inference_mode():
+            _prepare_pipe_before_inference(pipe)
+            img = pipe(
+                styled,
+                num_inference_steps=ddim_steps,
+                guidance_scale=cfg_scale,
+                height=sd.height,
+                width=sd.width,
+                negative_prompt=negative_prompt,
+                generator=generator,
+            ).images[0]
         indexed_images.append((scene_id, img))
 
     output_dir = Path(settings.OUTPUT_DIR) / job_id

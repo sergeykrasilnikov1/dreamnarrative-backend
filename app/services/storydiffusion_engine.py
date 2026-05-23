@@ -106,7 +106,11 @@ def set_attention_processor(unet, id_length, is_ipadapter=False):
             hidden_size = unet.config.block_out_channels[block_id]
         if cross_attention_dim is None:
             if name.startswith("up_blocks"):
-                attn_procs[name] = SpatialAttnProcessor2_0(id_length=id_length)
+                attn_procs[name] = SpatialAttnProcessor2_0(
+                    id_length=id_length,
+                    device=unet.device,
+                    dtype=unet.dtype,
+                )
                 total_count += 1
             else:
                 attn_procs[name] = AttnProcessor()
@@ -182,11 +186,12 @@ class SpatialAttnProcessor2_0(torch.nn.Module):
                 hidden_states[self.id_length :],
             ]
         else:
+            dtype = hidden_states.dtype
             encoder_hidden_states = torch.cat(
                 (
-                    self.id_bank[cur_step][0].to(self.device),
+                    self.id_bank[cur_step][0].to(self.device, dtype=dtype),
                     hidden_states[:1],
-                    self.id_bank[cur_step][1].to(self.device),
+                    self.id_bank[cur_step][1].to(self.device, dtype=dtype),
                     hidden_states[1:],
                 )
             )
