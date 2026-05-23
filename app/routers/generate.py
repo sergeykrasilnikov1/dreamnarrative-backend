@@ -20,6 +20,8 @@ class GenerateRequest(BaseModel):
     cim_result: CIMResponse
     cfg_scale: float = 7.5
     ddim_steps: int = 30
+    image_size: int = settings.IMAGE_SIZE
+    style: str = settings.STORYDIFFUSION_STYLE
 
 
 async def _run_generation_background(job_id: str, req: GenerateRequest):
@@ -36,6 +38,8 @@ async def _run_generation_background(job_id: str, req: GenerateRequest):
             cim_result=req.cim_result.model_dump(),
             cfg_scale=req.cfg_scale,
             ddim_steps=req.ddim_steps,
+            image_size=req.image_size,
+            style=req.style,
         )
         store["gen_status"] = GenerationStatus.DONE
         store["scenes"] = scenes_data
@@ -120,6 +124,18 @@ async def generate_status(job_id: str):
         gpu_progress_hint=gpu_hint or store.get("gen_progress"),
         error_message=store.get("gen_error"),
     )
+
+
+@router.get("/options", summary="Параметры StoryDiffusion для UI")
+async def generation_options():
+    return {
+        "image_size": settings.IMAGE_SIZE,
+        "style": settings.STORYDIFFUSION_STYLE,
+        "styles": settings.STORYDIFFUSION_STYLES,
+        "image_sizes": settings.STORYDIFFUSION_IMAGE_SIZES,
+        "cfg_scale": settings.DEFAULT_CFG,
+        "ddim_steps": settings.DEFAULT_STEPS,
+    }
 
 
 @router.get("/image/{job_id}/{scene_id}", summary="Получить изображение сцены")

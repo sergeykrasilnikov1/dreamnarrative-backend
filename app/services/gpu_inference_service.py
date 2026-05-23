@@ -15,6 +15,8 @@ def run_sdxl_generation(
     cim_result: dict,
     cfg_scale: float,
     ddim_steps: int,
+    image_size: int | None = None,
+    style: str | None = None,
 ) -> list[dict]:
     """Alias для совместимости API — использует StoryDiffusion."""
     return run_storydiffusion_generation(
@@ -23,6 +25,8 @@ def run_sdxl_generation(
         cim_result=cim_result,
         cfg_scale=cfg_scale,
         ddim_steps=ddim_steps,
+        image_size=image_size,
+        style=style,
     )
 
 

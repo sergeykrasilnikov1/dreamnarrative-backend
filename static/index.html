@@ -150,7 +150,8 @@ textarea { min-height: 100px; }
 .card-body-sm { padding: var(--space-4); }
 
 /* JSON viewer */
-.json-block { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-4); font-family: var(--font-mono); font-size: var(--text-xs); overflow-x: auto; white-space: pre; color: var(--color-text-muted); max-height: 280px; overflow-y: auto; line-height: 1.7; }
+.json-output-col { max-width: 420px; min-width: 0; }
+.json-block { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-4); font-family: var(--font-mono); font-size: var(--text-xs); overflow-x: auto; white-space: pre-wrap; word-break: break-word; color: var(--color-text-muted); max-height: 420px; overflow-y: auto; line-height: 1.7; }
 .json-key { color: var(--color-blue); }
 .json-str { color: var(--color-teal); }
 .json-num { color: var(--color-orange); }
@@ -285,6 +286,14 @@ textarea { min-height: 100px; }
           </div>
         </div>
         <div class="form-row">
+          <label for="image-style">Стиль StoryDiffusion</label>
+          <select id="image-style"></select>
+        </div>
+        <div class="form-row">
+          <label for="image-size">Размер изображения</label>
+          <select id="image-size"></select>
+        </div>
+        <div class="form-row">
           <label>CFG Scale (guidance)</label>
           <input type="text" id="cfg-scale" value="7.5" placeholder="7.5">
         </div>
@@ -314,19 +323,11 @@ textarea { min-height: 100px; }
             </div>
           </div>
           <div class="pipeline-connector"></div>
-          <div class="pipeline-step waiting" id="step-laf" onclick="showStep('laf')">
-            <div class="step-icon">LAF</div>
-            <div class="step-info">
-              <div class="step-name">Layered Attention Fusion</div>
-              <div class="step-desc">CSA 0.4 + CCA 0.6 → U-Net SDXL</div>
-            </div>
-          </div>
-          <div class="pipeline-connector"></div>
           <div class="pipeline-step waiting" id="step-gen" onclick="showStep('gen')">
             <div class="step-icon">GEN</div>
             <div class="step-info">
-              <div class="step-name">DDIM Sampling</div>
-              <div class="step-desc">30 шагов, 1024×1024, seed</div>
+              <div class="step-name">StoryDiffusion</div>
+              <div class="step-desc">consistent self-attention, GPU</div>
             </div>
           </div>
         </div>
@@ -378,9 +379,7 @@ textarea { min-height: 100px; }
           <div class="tabs" id="result-tabs">
             <button class="tab active" onclick="switchTab('nsm-tab')">NSM Сегментация</button>
             <button class="tab" onclick="switchTab('cim-tab')">CIM Персонажи</button>
-            <button class="tab" onclick="switchTab('laf-tab')">LAF Внимание</button>
             <button class="tab" onclick="switchTab('gallery-tab')">Галерея сцен</button>
-            <button class="tab" onclick="switchTab('metrics-tab')">Метрики</button>
           </div>
 
           <!-- NSM Tab -->
@@ -397,24 +396,10 @@ textarea { min-height: 100px; }
             </div>
           </div>
 
-          <!-- LAF Tab -->
-          <div class="tab-content" id="laf-tab">
-            <div id="laf-content">
-              <div style="color:var(--color-text-muted); font-size:var(--text-sm)">Ожидание LAF обработки...</div>
-            </div>
-          </div>
-
           <!-- Gallery Tab -->
           <div class="tab-content" id="gallery-tab">
             <div id="gallery-content">
               <div style="color:var(--color-text-muted); font-size:var(--text-sm)">Ожидание генерации...</div>
-            </div>
-          </div>
-
-          <!-- Metrics Tab -->
-          <div class="tab-content" id="metrics-tab">
-            <div id="metrics-content">
-              <div style="color:var(--color-text-muted); font-size:var(--text-sm)">Ожидание завершения...</div>
             </div>
           </div>
         </div>
@@ -487,8 +472,8 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
-  const idx = ['nsm-tab','cim-tab','laf-tab','gallery-tab','metrics-tab'].indexOf(tabId);
-  document.querySelectorAll('.tab')[idx].classList.add('active');
+  const idx = ['nsm-tab','cim-tab','gallery-tab'].indexOf(tabId);
+  if (idx >= 0) document.querySelectorAll('.tab')[idx].classList.add('active');
 }
 
 // ========================
@@ -882,15 +867,12 @@ function renderNSM(result) {
   });
 
   document.getElementById('nsm-content').innerHTML = `
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-5)">
-      <div>
+    <div style="display:grid; grid-template-columns: minmax(0, 420px) 1fr; gap:var(--space-5); align-items:start">
+      <div class="json-output-col">
         <div style="font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-3); display:flex; align-items:center; gap:var(--space-2)">
           <span class="badge badge-blue">LLM</span> JSON Output
         </div>
         <div class="json-block">${coloredJson}</div>
-        <div style="margin-top:var(--space-3); font-size:var(--text-xs); color:var(--color-text-muted)">
-          Точность NSM: <span style="color:var(--color-success); font-family:var(--font-mono)">89%</span> JSON-valid outputs на SDDb тесте (200 снов)
-        </div>
       </div>
       <div>
         <div style="font-size:var(--text-sm); font-weight:600; margin-bottom:var(--space-3)">
@@ -1085,6 +1067,8 @@ async function runPipeline() {
 
   const dreamText = document.getElementById('dream-input').value.trim();
   const cfgScale  = parseFloat(document.getElementById('cfg-scale').value) || 7.5;
+  const imageSize = parseInt(document.getElementById('image-size').value, 10) || 512;
+  const imageStyle = document.getElementById('image-style').value || 'Photographic';
 
   if (!dreamText) { alert('Введите текст сна'); state.running = false; return; }
 
@@ -1141,21 +1125,10 @@ async function runPipeline() {
     addLog('success', `CIM готов | λ=${cimResult.cca_lambda} μ=${cimResult.cca_mu}`);
     setStepState('cim', 'done');
 
-    // ── STEP 3: LAF config ───────────────────────────────────────────────
-    setStepState('laf', 'running');
-    setProgress(60, 'LAF: конфигурация U-Net SDXL...');
-    addLog('info', 'Назначение CSA/CCA по 88 transformer блокам');
-
-    state.lafResult = runLAF(nsmResult, cimResult);
-    renderAttentionViz(document.getElementById('laf-content'), state.lafResult);
-    setStepState('laf', 'done');
-    setProgress(65, 'LAF готов');
-    addLog('success', 'LAF: λ_CSA=0.4, μ_CCA=0.6 сконфигурированы');
-
-    // ── STEP 4: StoryDiffusion на GPU ───────────────────────────────────
+    // ── STEP 3: StoryDiffusion на GPU ───────────────────────────────────
     setStepState('gen', 'running');
-    setProgress(68, 'StoryDiffusion: consistent self-attention...');
-    addLog('info', 'POST /api/generate/start → StoryDiffusion GPU');
+    setProgress(60, 'StoryDiffusion: consistent self-attention...');
+    addLog('info', `POST /api/generate/start → ${imageSize}px, стиль «${imageStyle}»`);
 
     const genStart = await apiPost('/generate/start', {
       job_id: currentJobId,
@@ -1163,6 +1136,8 @@ async function runPipeline() {
       cim_result: cimResult,
       cfg_scale: cfgScale,
       ddim_steps: 30,
+      image_size: imageSize,
+      style: imageStyle,
     });
 
     const gpuTrack = document.getElementById('gpu-track');
@@ -1228,7 +1203,6 @@ async function runPipeline() {
     const track = document.getElementById('gpu-track');
     if (track) track.style.display = 'none';
 
-    renderMetrics();
     if (genSuccess) {
       setStepState('gen', 'done');
       setProgress(100, 'Генерация завершена!');
@@ -1253,6 +1227,37 @@ async function runPipeline() {
   btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Запустить снова';
   state.running = false;
 }
+
+// Загрузка параметров генерации из .env (через API)
+async function initGenerationOptions() {
+  const styleSel = document.getElementById('image-style');
+  const sizeSel = document.getElementById('image-size');
+  const fallbackStyles = [
+    '(No style)', 'Japanese Anime', 'Digital/Oil Painting', 'Pixar/Disney Character',
+    'Photographic', 'Comic book', 'Line art', 'Black and White Film Noir', 'Isometric Rooms',
+  ];
+  const fallbackSizes = [512, 768, 1024];
+
+  function fillSelect(sel, items, selected) {
+    sel.innerHTML = items.map(v => {
+      const label = typeof v === 'number' ? `${v}×${v}` : v;
+      const selectedAttr = String(v) === String(selected) ? ' selected' : '';
+      return `<option value="${v}"${selectedAttr}>${label}</option>`;
+    }).join('');
+  }
+
+  try {
+    const opts = await apiGet('/generate/options');
+    fillSelect(styleSel, opts.styles || fallbackStyles, opts.style || 'Photographic');
+    fillSelect(sizeSel, opts.image_sizes || fallbackSizes, opts.image_size || 512);
+    if (opts.cfg_scale) document.getElementById('cfg-scale').value = opts.cfg_scale;
+  } catch {
+    fillSelect(styleSel, fallbackStyles, 'Photographic');
+    fillSelect(sizeSel, fallbackSizes, 512);
+  }
+}
+
+initGenerationOptions();
 
 // Theme toggle
 (function(){

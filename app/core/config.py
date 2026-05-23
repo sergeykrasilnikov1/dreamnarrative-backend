@@ -37,6 +37,18 @@ class Settings(BaseSettings):
     STORYDIFFUSION_ID_LENGTH: int = 3  # consistent self-attention (мин. 3 сцены)
     STORYDIFFUSION_SA32: float = 0.5
     STORYDIFFUSION_SA64: float = 0.5
+    STORYDIFFUSION_STYLES: list[str] = [
+        "(No style)",
+        "Japanese Anime",
+        "Digital/Oil Painting",
+        "Pixar/Disney Character",
+        "Photographic",
+        "Comic book",
+        "Line art",
+        "Black and White Film Noir",
+        "Isometric Rooms",
+    ]
+    STORYDIFFUSION_IMAGE_SIZES: list[int] = [512, 768, 1024]
 
     # Legacy alias (не используется напрямую)
     SDXL_MODEL_ID: str = "SG161222/RealVisXL_V4.0"

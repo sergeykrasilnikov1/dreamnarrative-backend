@@ -107,6 +107,8 @@ def run_storydiffusion_generation(
     cim_result: dict,
     cfg_scale: float,
     ddim_steps: int,
+    image_size: int | None = None,
+    style: str | None = None,
 ) -> list[dict]:
     """Генерирует scene_*.png с consistent self-attention StoryDiffusion."""
     import torch
@@ -126,12 +128,18 @@ def run_storydiffusion_generation(
     id_length = min(settings.STORYDIFFUSION_ID_LENGTH, len(scene_prompts))
     id_length = max(3, id_length)
 
-    sd.height = settings.IMAGE_SIZE
-    sd.width = settings.IMAGE_SIZE
+    size = image_size or settings.IMAGE_SIZE
+    if size not in settings.STORYDIFFUSION_IMAGE_SIZES:
+        size = settings.IMAGE_SIZE
+    sd.height = size
+    sd.width = size
     sd.sa32 = settings.STORYDIFFUSION_SA32
     sd.sa64 = settings.STORYDIFFUSION_SA64
 
-    style = settings.STORYDIFFUSION_STYLE
+    style_name = style or settings.STORYDIFFUSION_STYLE
+    if style_name not in settings.STORYDIFFUSION_STYLES:
+        style_name = settings.STORYDIFFUSION_STYLE
+    style = style_name
     neg_base = "blurry, low quality, distorted, text, watermark, bad anatomy, bad hands"
     raw_texts = [p for _, p in scene_prompts]
     id_texts = raw_texts[:id_length]
@@ -150,7 +158,7 @@ def run_storydiffusion_generation(
 
     print(
         f"[StoryDiffusion] job={job_id} scenes={len(scene_prompts)} "
-        f"id_length={id_length} style={style}"
+        f"id_length={id_length} style={style} size={size}x{size}"
     )
 
     with torch.inference_mode():
