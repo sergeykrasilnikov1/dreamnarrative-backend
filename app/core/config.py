@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     STORYDIFFUSION_DIR: str = str(_ENV_FILE.parent / "third_party" / "StoryDiffusion")
     STORYDIFFUSION_MODEL_ID: str = "SG161222/RealVisXL_V4.0"
     STORYDIFFUSION_STYLE: str = "Photographic"
-    STORYDIFFUSION_ID_LENGTH: int = 3  # consistent self-attention (мин. 3 сцены)
+    STORYDIFFUSION_ID_LENGTH: int = 3  # legacy min; батч = все сцены (см. run_storydiffusion_generation)
     STORYDIFFUSION_SA32: float = 0.5
     STORYDIFFUSION_SA64: float = 0.5
     STORYDIFFUSION_STYLES: list[str] = [

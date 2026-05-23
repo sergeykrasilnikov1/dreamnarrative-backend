@@ -142,14 +142,19 @@ def run_storydiffusion_generation(
     scene_prompts = _build_prompts(nsm_result)
     if not scene_prompts:
         raise ValueError("NSM не содержит сцен для генерации")
-    if len(scene_prompts) < 3:
+    if len(scene_prompts) < settings.NSM_MIN_SCENES:
         raise ValueError(
-            "StoryDiffusion требует минимум 3 сцены (consistent self-attention). "
+            f"StoryDiffusion требует минимум {settings.NSM_MIN_SCENES} сцен. "
+            f"Сейчас: {len(scene_prompts)}."
+        )
+    if len(scene_prompts) > settings.NSM_MAX_SCENES:
+        raise ValueError(
+            f"Слишком много сцен для одного батча (макс. {settings.NSM_MAX_SCENES}). "
             f"Сейчас: {len(scene_prompts)}."
         )
 
-    id_length = min(settings.STORYDIFFUSION_ID_LENGTH, len(scene_prompts))
-    id_length = max(3, id_length)
+    # Все N сцен — один батч CSA (как в ВКР §5.5)
+    id_length = len(scene_prompts)
 
     size = image_size or settings.IMAGE_SIZE
     if size not in settings.STORYDIFFUSION_IMAGE_SIZES:
@@ -165,10 +170,8 @@ def run_storydiffusion_generation(
     style = style_name
     neg_base = "blurry, low quality, distorted, text, watermark, bad anatomy, bad hands"
     raw_texts = [p for _, p in scene_prompts]
-    id_texts = raw_texts[:id_length]
-    real_texts = raw_texts[id_length:]
 
-    id_texts, negative_prompt = sd.apply_style(style, id_texts, neg_base)
+    batch_texts, negative_prompt = sd.apply_style(style, raw_texts, neg_base)
 
     seed = settings.DDIM_SEED_BASE
     sd.setup_seed(seed)
@@ -189,21 +192,21 @@ def run_storydiffusion_generation(
 
     if use_laf:
         set_laf_attention_processors(pipe.unet, id_length, char_emb, lam, mu)
-        set_laf_batch_context(scene_char_lists[:id_length], id_length)
+        set_laf_batch_context(scene_char_lists, id_length)
         print(f"[LAF] DreamNarrative: {char_emb.shape[0]} characters, batch={id_length}")
     else:
         sd.set_attention_processor(pipe.unet, id_length, is_ipadapter=False)
         print("[StoryDiffusion] LAF disabled — CSA only (no CIM embeddings)")
 
     print(
-        f"[StoryDiffusion] job={job_id} scenes={len(scene_prompts)} "
-        f"id_length={id_length} style={style} size={size}x{size}"
+        f"[StoryDiffusion] job={job_id} batch={id_length} scenes (single pass) "
+        f"style={style} size={size}x{size}"
     )
 
     with torch.inference_mode():
         _prepare_pipe_before_inference(pipe)
-        id_images = pipe(
-            id_texts,
+        images = pipe(
+            batch_texts,
             num_inference_steps=ddim_steps,
             guidance_scale=cfg_scale,
             height=sd.height,
@@ -212,34 +215,14 @@ def run_storydiffusion_generation(
             generator=generator,
         ).images
 
-    indexed_images: list[tuple[int, object]] = list(
-        zip([sid for sid, _ in scene_prompts[:id_length]], id_images)
-    )
+    if len(images) != id_length:
+        raise RuntimeError(
+            f"Ожидалось {id_length} изображений, pipe вернул {len(images)}"
+        )
 
-    sd.write = False
-    torch.cuda.empty_cache()
-    for scene_id, prompt_text in scene_prompts[id_length:]:
-        sd.cur_step = 0
-        sd.attn_count = 0
-        styled = sd.apply_style_positive(style, prompt_text)
-        if use_laf:
-            idx = next(
-                (i for i, (sid, _) in enumerate(scene_prompts) if sid == scene_id),
-                0,
-            )
-            set_laf_batch_context([scene_char_lists[idx]] if idx < len(scene_char_lists) else [[]], 1)
-        with torch.inference_mode():
-            _prepare_pipe_before_inference(pipe)
-            img = pipe(
-                styled,
-                num_inference_steps=ddim_steps,
-                guidance_scale=cfg_scale,
-                height=sd.height,
-                width=sd.width,
-                negative_prompt=negative_prompt,
-                generator=generator,
-            ).images[0]
-        indexed_images.append((scene_id, img))
+    indexed_images: list[tuple[int, object]] = list(
+        zip([sid for sid, _ in scene_prompts], images)
+    )
 
     output_dir = Path(settings.OUTPUT_DIR) / job_id
     output_dir.mkdir(parents=True, exist_ok=True)
