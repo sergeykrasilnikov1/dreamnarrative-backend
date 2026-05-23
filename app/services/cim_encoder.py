@@ -96,6 +96,23 @@ def _clip_text_features(model, inputs: dict) -> torch.Tensor:
     return model.text_projection(pooled)
 
 
+def _char_fields(c) -> tuple[str, str]:
+    """Имя и описание из CharacterSchema или dict."""
+    if isinstance(c, dict):
+        name = str(c.get("name") or "unknown").strip()
+        appearance = str(
+            c.get("canonical_appearance") or c.get("appearance") or name
+        ).strip()
+    else:
+        name = str(getattr(c, "name", None) or "unknown").strip()
+        appearance = str(
+            getattr(c, "canonical_appearance", None)
+            or getattr(c, "appearance", None)
+            or name
+        ).strip()
+    return name, appearance
+
+
 @torch.inference_mode()
 def encode_characters(characters: list) -> tuple[torch.Tensor, dict[str, int], list[list[float]]]:
     """
@@ -113,10 +130,7 @@ def encode_characters(characters: list) -> tuple[torch.Tensor, dict[str, int], l
     texts: list[str] = []
 
     for c in characters:
-        name = getattr(c, "name", None) or c.get("name", "unknown")
-        appearance = getattr(c, "canonical_appearance", None) or c.get(
-            "canonical_appearance", c.get("appearance", name)
-        )
+        name, appearance = _char_fields(c)
         names.append(name)
         texts.append(_appearance_prompt(name, appearance))
 
