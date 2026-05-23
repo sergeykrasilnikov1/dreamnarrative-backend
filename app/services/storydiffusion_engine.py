@@ -2,21 +2,30 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
 import random
-import sys
 from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn.functional as F
+from diffusers.models.attention_processor import AttnProcessor2_0 as AttnProcessor
 
 _SD_ROOT = Path(__file__).resolve().parents[2] / "third_party" / "StoryDiffusion"
-if str(_SD_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SD_ROOT))
 
-from utils.gradio_utils import AttnProcessor2_0 as AttnProcessor, cal_attn_mask_xl
-from utils.style_template import styles
 
+def _load_style_template():
+    path = _SD_ROOT / "utils" / "style_template.py"
+    spec = importlib.util.spec_from_file_location("storydiffusion_style_template", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Не найден {path}. Запустите scripts/setup_storydiffusion.sh")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_styles_mod = _load_style_template()
+styles = _styles_mod.styles
 DEFAULT_STYLE_NAME = "Japanese Anime"
 
 total_count = attn_count = cur_step = 0
@@ -24,6 +33,37 @@ mask1024 = mask4096 = None
 write = False
 height = width = 512
 sa32 = sa64 = 0.5
+
+
+def cal_attn_mask_xl(
+    total_length,
+    id_length,
+    sa32,
+    sa64,
+    height,
+    width,
+    device="cuda",
+    dtype=torch.float16,
+):
+    """Из StoryDiffusion utils/gradio_utils.py (без gradio/torchvision)."""
+    nums_1024 = (height // 32) * (width // 32)
+    nums_4096 = (height // 16) * (width // 16)
+    bool_matrix1024 = torch.rand((1, total_length * nums_1024), device=device, dtype=dtype) < sa32
+    bool_matrix4096 = torch.rand((1, total_length * nums_4096), device=device, dtype=dtype) < sa64
+    bool_matrix1024 = bool_matrix1024.repeat(total_length, 1)
+    bool_matrix4096 = bool_matrix4096.repeat(total_length, 1)
+    for i in range(total_length):
+        bool_matrix1024[i : i + 1, id_length * nums_1024 :] = False
+        bool_matrix4096[i : i + 1, id_length * nums_4096 :] = False
+        bool_matrix1024[i : i + 1, i * nums_1024 : (i + 1) * nums_1024] = True
+        bool_matrix4096[i : i + 1, i * nums_4096 : (i + 1) * nums_4096] = True
+    mask1024 = bool_matrix1024.unsqueeze(1).repeat(1, nums_1024, 1).reshape(
+        -1, total_length * nums_1024
+    )
+    mask4096 = bool_matrix4096.unsqueeze(1).repeat(1, nums_4096, 1).reshape(
+        -1, total_length * nums_4096
+    )
+    return mask1024, mask4096
 
 
 def setup_seed(seed):
