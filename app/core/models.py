@@ -5,7 +5,12 @@ from enum import Enum
 
 class PipelineRequest(BaseModel):
     dream_text: str = Field(..., min_length=20, max_length=5000, description="Текст описания сна")
-    n_scenes: int = Field(default=4, ge=3, le=8)
+    n_scenes: Optional[int] = Field(
+        default=None,
+        ge=3,
+        le=8,
+        description="Deprecated: кол-во сцен определяет LLM",
+    )
     cfg_scale: float = Field(default=7.5, ge=1.0, le=20.0)
     ddim_steps: int = Field(default=30, ge=10, le=50)
     seed_base: int = Field(default=1)

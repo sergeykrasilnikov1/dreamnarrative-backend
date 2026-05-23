@@ -42,7 +42,9 @@ class Settings(BaseSettings):
     SDXL_MODEL_ID: str = "SG161222/RealVisXL_V4.0"
 
     # Pipeline defaults
-    DEFAULT_SCENES: int = 4
+    NSM_MIN_SCENES: int = 3
+    NSM_MAX_SCENES: int = 8
+    DEFAULT_SCENES: int = 4  # legacy, LLM выбирает сам
     DEFAULT_CFG: float = 7.5
     DEFAULT_STEPS: int = 30
     DDIM_SEED_BASE: int = 1

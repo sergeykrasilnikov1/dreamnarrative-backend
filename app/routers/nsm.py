@@ -11,7 +11,7 @@ router = APIRouter()
 async def nsm_run(req: PipelineRequest):
     job_id = str(uuid.uuid4())[:8]
     try:
-        result = run_nsm(req.dream_text, req.n_scenes, job_id)
+        result = run_nsm(req.dream_text, job_id)
         job_store[job_id] = {"nsm": result.model_dump(), "status": "nsm_done"}
         return result
     except ConnectionError as e:

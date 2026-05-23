@@ -87,23 +87,16 @@ def _global_character_description(nsm: dict) -> str:
 
 
 def _build_prompts(nsm: dict) -> list[tuple[int, str]]:
-    """(scene_id, text prompt) в порядке сцен."""
-    char_desc = _global_character_description(nsm)
-    lookup = _char_lookup(nsm)
+    """(scene_id, sdxl_prompt от LLM) в порядке сцен."""
     ordered = sorted(nsm.get("scenes", []), key=lambda s: int(s.get("scene_id", 0)))
     out: list[tuple[int, str]] = []
 
     for scene in ordered:
         scene_id = int(scene["scene_id"])
-        body = scene.get("sdxl_prompt") or scene.get("description") or scene.get("location", "")
-        scene_chars = scene.get("characters") or []
-        char_bits = [lookup[n] for n in scene_chars if n in lookup and lookup[n]]
-        if char_bits:
-            prefix = ", ".join(char_bits)
-            prompt = f"{prefix}, {body}" if body else prefix
-        else:
-            prompt = f"{char_desc}, {body}" if body else char_desc
-        out.append((scene_id, prompt.strip().strip(",")))
+        prompt = (scene.get("sdxl_prompt") or scene.get("description") or scene.get("location", "")).strip()
+        if not prompt:
+            raise ValueError(f"Сцена {scene_id}: пустой sdxl_prompt")
+        out.append((scene_id, prompt))
 
     return out
 

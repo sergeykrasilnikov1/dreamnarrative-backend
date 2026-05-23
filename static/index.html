@@ -170,7 +170,7 @@ textarea { min-height: 100px; }
 .scene-canvas { width: 100%; height: 100%; }
 .scene-meta { padding: var(--space-3) var(--space-4); }
 .scene-num { font-size: var(--text-xs); font-weight: 600; color: var(--color-text-faint); margin-bottom: var(--space-1); font-family: var(--font-mono); }
-.scene-prompt { font-size: var(--text-xs); color: var(--color-text-muted); line-height: 1.5; }
+.scene-prompt { font-size: var(--text-xs); color: var(--color-text-muted); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 
 /* Characters list */
 .char-item { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3); background: var(--color-surface-2); border-radius: var(--radius-md); margin-bottom: var(--space-2); }
@@ -279,13 +279,10 @@ textarea { min-height: 100px; }
           <button class="sample-btn" onclick="setSample(2)">✦ Люцидный сон: городской лабиринт</button>
         </div>
         <div class="form-row">
-          <label>Кол-во сцен (N)</label>
-          <select id="scene-count">
-            <option value="3">3 сцены</option>
-            <option value="4" selected>4 сцены</option>
-            <option value="5">5 сцен</option>
-            <option value="6">6 сцен</option>
-          </select>
+          <label>Кол-во сцен</label>
+          <div style="font-size:var(--text-sm); color:var(--color-text-muted); padding:var(--space-2) 0">
+            LLM определит автоматически (3–8 сцен)
+          </div>
         </div>
         <div class="form-row">
           <label>CFG Scale (guidance)</label>
@@ -840,17 +837,27 @@ function renderAttentionViz(container, lafResult) {
 // ========================
 // RENDER FUNCTIONS
 // ========================
+function escapeHtml(text) {
+  return String(text ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function renderNSM(result) {
   const jsonStr = JSON.stringify({
     total_scenes: result.total_scenes,
     characters: result.characters.map(c => ({name: c.name, canonical_appearance: c.canonical_appearance, scenes_present: c.scenes_present})),
     scenes: result.scenes.map(s => ({
       scene_id: s.scene_id,
-      description: s.description.substring(0, 80) + (s.description.length > 80 ? '...' : ''),
+      description: s.description,
       location: s.location,
       emotion: s.emotion,
       characters: (s.characters || []).map(c => typeof c === 'string' ? c : (c?.name ?? String(c))),
-      objects: s.objects
+      objects: s.objects,
+      sdxl_prompt: s.sdxl_prompt,
+      negative_prompt: s.negative_prompt,
     }))
   }, null, 2);
 
@@ -953,7 +960,7 @@ function renderCIM(cimResult) {
   document.getElementById('cim-content').innerHTML = html;
 }
 
-function renderMetrics(nScenes) {
+function renderMetrics() {
   // Based on Table 1 from thesis
   const models = [
     { name: 'SD XL (baseline)', clip: 0.31, fid: 18.7, fss: 0.41, dss: 0.38, vram: 10.1, tpimg: 18.2, highlight: false },
@@ -1077,7 +1084,6 @@ async function runPipeline() {
   state.logTime = 0;
 
   const dreamText = document.getElementById('dream-input').value.trim();
-  const nScenes   = parseInt(document.getElementById('scene-count').value);
   const cfgScale  = parseFloat(document.getElementById('cfg-scale').value) || 7.5;
 
   if (!dreamText) { alert('Введите текст сна'); state.running = false; return; }
@@ -1100,13 +1106,14 @@ async function runPipeline() {
     // ── STEP 1: NSM via Groq ─────────────────────────────────────────────
     setStepState('nsm', 'running');
     setProgress(5, 'NSM: LLM сегментация...');
-    addLog('info', `POST /api/nsm/run — dream ${dreamText.length} chars, N=${nScenes}`);
+    addLog('info', `POST /api/nsm/run — dream ${dreamText.length} chars, LLM выберет N сцен`);
 
     const nsmResult = await apiPost('/nsm/run', {
       dream_text: dreamText,
-      n_scenes:   nScenes,
       cfg_scale:  cfgScale,
     });
+
+    const nScenes = nsmResult.total_scenes;
 
     currentJobId = nsmResult.job_id;
     state.nsmResult = nsmResult;
@@ -1204,7 +1211,7 @@ async function runPipeline() {
               ${imgSrc ? `<div class="scene-img"><img src="${imgSrc}" alt="Scene ${scene.scene_id}" style="width:100%;height:100%;object-fit:cover" loading="lazy"></div>` : ''}
               <div class="scene-meta">
                 <div class="scene-num">SCENE ${scene.scene_id} · <span style="color:var(--color-primary)">${scene.emotion?.toUpperCase()||''}</span> · seed=${scene.seed}</div>
-                <div class="scene-prompt">${scene.prompt?.substring(0,120)}...</div>
+                <div class="scene-prompt">${escapeHtml(scene.prompt || '')}</div>
               </div>
             </div>`;
         }
@@ -1221,7 +1228,7 @@ async function runPipeline() {
     const track = document.getElementById('gpu-track');
     if (track) track.style.display = 'none';
 
-    renderMetrics(nScenes);
+    renderMetrics();
     if (genSuccess) {
       setStepState('gen', 'done');
       setProgress(100, 'Генерация завершена!');

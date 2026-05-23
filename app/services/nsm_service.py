@@ -9,43 +9,47 @@ from app.services.llm_client import chat_json, unload_local_llm, _parse_json_res
 NSM_SYSTEM_PROMPT = """You are a dream narrative segmentation system.
 Given a dream description, you MUST output ONLY valid JSON — no explanation, no markdown.
 
+Decide yourself how many sequential scenes (between 3 and 8) best represent the dream.
+Simple dreams → fewer scenes; complex dreams with many events → more scenes.
+
 Output format:
 {
   "characters": [
     {
       "name": "unique_identifier_name",
       "appearance": "detailed visual description",
-      "canonical_appearance": "concise stable appearance for SDXL prompt"
+      "canonical_appearance": "concise stable appearance for image generation"
     }
   ],
   "scenes": [
     {
       "scene_id": 1,
-      "description": "what happens in this scene",
-      "characters": ["character names present"],
+      "description": "what happens in this scene (narrative)",
+      "characters": ["character_name"],
       "objects": ["key objects"],
-      "location": "detailed location description for image generation",
-      "emotion": "wonder",
-      "sdxl_prompt": "optimized SDXL prompt: location, characters, atmosphere, style",
+      "location": "detailed location for image generation",
+      "emotion": "fear",
+      "sdxl_prompt": "FULL English prompt for image model: location, all visible characters with appearance, action, lighting, mood, cinematic style — one complete paragraph, ready to generate",
       "negative_prompt": "blurry, low quality, distorted, text, watermark"
     }
   ]
-}"""
+}
+
+CRITICAL:
+- Every scene MUST have a non-empty sdxl_prompt (complete generative prompt, not just location).
+- scenes[].characters: ONLY string names from characters[].name — never null, never objects.
+- scene_id: 1, 2, 3, ... sequential."""
 
 
-def build_user_prompt(dream_text: str, n_scenes: int) -> str:
-    return f"""Segment this dream into exactly {n_scenes} sequential scenes.
-Extract all characters with their canonical appearance for consistent image generation.
-Build detailed SDXL-optimized prompts (include: location, characters, lighting, mood, art style).
+def build_user_prompt(dream_text: str) -> str:
+    return f"""Analyze this dream and split it into the right number of scenes (3–8).
+Extract characters with canonical_appearance for consistent image generation.
+For each scene write sdxl_prompt: a FULL prompt for Stable Diffusion / StoryDiffusion (English).
 
 Dream text:
 \"\"\"{dream_text}\"\"\"
 
-Output {n_scenes} scenes in the JSON format. ONLY JSON, no other text.
-
-RULES for scenes[].characters:
-- Use ONLY string identifiers from the top-level characters[].name list.
-- Example: "characters": ["flying_person", "silver_hair_woman"] — NOT null, NOT {{}} objects."""
+Output JSON only. Choose scene count based on dream complexity."""
 
 
 def _extract_scene_character_names(raw_chars, known_names: set[str]) -> list[str]:
@@ -104,13 +108,41 @@ def _infer_scene_characters(
     return found
 
 
-def run_nsm(dream_text: str, n_scenes: int, job_id: str) -> NSMResponse:
+def _compose_sdxl_prompt(scene: dict, char_defs: list[dict]) -> str:
+    """Полный промпт для генерации, если LLM не вернул sdxl_prompt."""
+    for key in ("sdxl_prompt", "image_prompt", "generation_prompt"):
+        val = (scene.get(key) or "").strip()
+        if val:
+            return val
+
+    lookup = {
+        c["name"]: (c.get("canonical_appearance") or c.get("appearance") or "")
+        for c in char_defs
+    }
+    parts: list[str] = []
+    for name in scene.get("characters") or []:
+        if name in lookup and lookup[name]:
+            parts.append(lookup[name])
+    if scene.get("location"):
+        parts.append(str(scene["location"]))
+    if scene.get("description"):
+        parts.append(str(scene["description"]))
+    if scene.get("emotion"):
+        parts.append(f"{scene['emotion']} mood, emotional atmosphere")
+    objs = [str(o) for o in (scene.get("objects") or []) if o]
+    if objs:
+        parts.append(", ".join(objs))
+    parts.append("cinematic dream scene, highly detailed, atmospheric lighting")
+    return ", ".join(p for p in parts if p)
+
+
+def run_nsm(dream_text: str, job_id: str) -> NSMResponse:
     t0 = time.time()
 
     raw = ""
     model_name = settings.LLM_MODEL
     try:
-        raw, model_name = chat_json(NSM_SYSTEM_PROMPT, build_user_prompt(dream_text, n_scenes))
+        raw, model_name = chat_json(NSM_SYSTEM_PROMPT, build_user_prompt(dream_text))
         data = _parse_json_response(raw)
     except json.JSONDecodeError as e:
         raise ValueError(f"LLM вернул невалидный JSON: {e}. Preview: {raw[:200]!r}") from e
@@ -155,7 +187,7 @@ def run_nsm(dream_text: str, n_scenes: int, job_id: str) -> NSMResponse:
                 objects=objects,
                 location=s.get("location", ""),
                 emotion=s.get("emotion", "wonder"),
-                sdxl_prompt=s.get("sdxl_prompt", s.get("description", "")),
+                sdxl_prompt=_compose_sdxl_prompt({**s, "characters": scene_chars}, char_defs),
                 negative_prompt=s.get(
                     "negative_prompt",
                     "blurry, low quality, distorted, text, watermark, nsfw",
@@ -165,6 +197,13 @@ def run_nsm(dream_text: str, n_scenes: int, job_id: str) -> NSMResponse:
 
     if not scenes:
         raise ValueError("LLM не вернул ни одной сцены")
+    if len(scenes) < settings.NSM_MIN_SCENES:
+        raise ValueError(
+            f"LLM вернул {len(scenes)} сцен, нужно минимум {settings.NSM_MIN_SCENES} "
+            "(StoryDiffusion). Попробуйте ещё раз или опишите сон подробнее."
+        )
+    if len(scenes) > settings.NSM_MAX_SCENES:
+        scenes = scenes[: settings.NSM_MAX_SCENES]
 
     characters = [
         CharacterSchema(
