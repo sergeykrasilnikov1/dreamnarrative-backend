@@ -6,11 +6,15 @@ from __future__ import annotations
 
 import base64
 import gc
-import random
 from pathlib import Path
 
 from app.core.config import settings
 from app.services import storydiffusion_engine as sd
+from app.services.cim_service import build_scene_char_indices, load_char_embeddings_from_cim
+from app.services.laf_processors import (
+    set_laf_attention_processors,
+    set_laf_batch_context,
+)
 
 _pipe = None
 _device = None
@@ -170,12 +174,26 @@ def run_storydiffusion_generation(
     sd.setup_seed(seed)
     generator = torch.Generator(device=device).manual_seed(seed)
 
+    # ── LAF: CSA (StoryDiffusion) + CCA (CIM) ─────────────────────────────
+    char_emb, name_to_idx = load_char_embeddings_from_cim(cim_result)
+    scene_char_lists = build_scene_char_indices(nsm_result, name_to_idx)
+    lam = float(cim_result.get("cca_lambda", settings.LAF_LAMBDA_CSA))
+    mu = float(cim_result.get("cca_mu", settings.LAF_MU_CCA))
+    use_laf = settings.ENABLE_LAF and char_emb.shape[0] > 0
+
     sd.write = True
     sd.cur_step = 0
     sd.attn_count = 0
     sd.mask1024 = None
     sd.mask4096 = None
-    sd.set_attention_processor(pipe.unet, id_length, is_ipadapter=False)
+
+    if use_laf:
+        set_laf_attention_processors(pipe.unet, id_length, char_emb, lam, mu)
+        set_laf_batch_context(scene_char_lists[:id_length], id_length)
+        print(f"[LAF] DreamNarrative: {char_emb.shape[0]} characters, batch={id_length}")
+    else:
+        sd.set_attention_processor(pipe.unet, id_length, is_ipadapter=False)
+        print("[StoryDiffusion] LAF disabled — CSA only (no CIM embeddings)")
 
     print(
         f"[StoryDiffusion] job={job_id} scenes={len(scene_prompts)} "
@@ -204,6 +222,12 @@ def run_storydiffusion_generation(
         sd.cur_step = 0
         sd.attn_count = 0
         styled = sd.apply_style_positive(style, prompt_text)
+        if use_laf:
+            idx = next(
+                (i for i, (sid, _) in enumerate(scene_prompts) if sid == scene_id),
+                0,
+            )
+            set_laf_batch_context([scene_char_lists[idx]] if idx < len(scene_char_lists) else [[]], 1)
         with torch.inference_mode():
             _prepare_pipe_before_inference(pipe)
             img = pipe(

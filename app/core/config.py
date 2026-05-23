@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     ARCFACE_THRESHOLD: float = 0.85
     LAF_LAMBDA_CSA: float = 0.4
     LAF_MU_CCA: float = 0.6
+    ENABLE_LAF: bool = True
+
+    # CIM — CLIP identity encoder
+    CIM_CLIP_MODEL_ID: str = "openai/clip-vit-large-patch14"
+    CIM_DEVICE: str = "auto"  # auto | cuda | cpu
     IMAGE_SIZE: int = 512
 
     OUTPUT_DIR: str = "outputs"

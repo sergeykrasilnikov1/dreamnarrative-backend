@@ -909,9 +909,9 @@ function renderCIM(cimResult) {
 
   embeddings.forEach(emb => {
     const name = emb.character_name || emb.name || 'unknown';
-    const preview = Array.isArray(emb.embedding_preview)
+    const preview = Array.isArray(emb.embedding_preview) && emb.embedding_preview.length
       ? emb.embedding_preview
-      : Array.from({ length: 12 }, () => (Math.random() * 2 - 1).toFixed(4));
+      : (Array.isArray(emb.embedding) ? emb.embedding.slice(0, 12) : []);
     const dim = emb.embedding_dim || emb.dim || 1024;
     html += `
       <div style="background:var(--color-surface-2); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-4); margin-bottom:var(--space-3)">

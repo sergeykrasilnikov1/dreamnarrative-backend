@@ -52,6 +52,8 @@ class EmbeddingSchema(BaseModel):
     arcface_dim: int = 512
     face_similarity_score: float
     mlp_projection: str = "1024 → 768"
+    embedding: list[float] = Field(default_factory=list)
+    embedding_preview: list[float] = Field(default_factory=list)
 
 
 class CIMResponse(BaseModel):
