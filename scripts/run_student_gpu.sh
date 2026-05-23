@@ -14,6 +14,7 @@ echo "==> Workdir: $WORKDIR"
 
 python3 -m pip install -q -r requirements.txt
 python3 -m pip install -q -r requirements-gpu.txt
+bash scripts/setup_storydiffusion.sh
 
 python3 -c "import torch; print('CUDA:', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else '')"
 

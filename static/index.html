@@ -827,7 +827,7 @@ function renderAttentionViz(container, lafResult) {
   // DDIM info
   html += `
     <div class="metrics-grid">
-      <div class="metric-card"><div class="metric-label">Backbone</div><div style="font-size:var(--text-sm); font-weight:600; font-family:var(--font-mono)">SDXL 1.0</div></div>
+      <div class="metric-card"><div class="metric-label">Backbone</div><div style="font-size:var(--text-sm); font-weight:600; font-family:var(--font-mono)">StoryDiffusion</div></div>
       <div class="metric-card"><div class="metric-label">Разрешение</div><div style="font-size:var(--text-sm); font-weight:600; font-family:var(--font-mono)">${lafResult.ddim.size}</div></div>
       <div class="metric-card"><div class="metric-label">VRAM (инф.)</div><div style="font-size:var(--text-sm); font-weight:600; font-family:var(--font-mono)">${lafResult.memory}</div></div>
       <div class="metric-card"><div class="metric-label">Блоки U-Net</div><div style="font-size:var(--text-sm); font-weight:600; font-family:var(--font-mono)">${lafResult.total_transformer_blocks}</div></div>
@@ -1145,10 +1145,10 @@ async function runPipeline() {
     setProgress(65, 'LAF готов');
     addLog('success', 'LAF: λ_CSA=0.4, μ_CCA=0.6 сконфигурированы');
 
-    // ── STEP 4: SDXL на локальном GPU ───────────────────────────────────
+    // ── STEP 4: StoryDiffusion на GPU ───────────────────────────────────
     setStepState('gen', 'running');
-    setProgress(68, 'SDXL генерация на GPU...');
-    addLog('info', 'POST /api/generate/start → local GPU');
+    setProgress(68, 'StoryDiffusion: consistent self-attention...');
+    addLog('info', 'POST /api/generate/start → StoryDiffusion GPU');
 
     const genStart = await apiPost('/generate/start', {
       job_id: currentJobId,

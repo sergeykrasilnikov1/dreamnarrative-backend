@@ -30,8 +30,16 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "llama-3.1-8b-instant"
 
-    # SDXL на локальном GPU
-    SDXL_MODEL_ID: str = "stabilityai/stable-diffusion-xl-base-1.0"
+    # StoryDiffusion (https://github.com/HVision-NKU/StoryDiffusion)
+    STORYDIFFUSION_DIR: str = str(_ENV_FILE.parent / "third_party" / "StoryDiffusion")
+    STORYDIFFUSION_MODEL_ID: str = "SG161222/RealVisXL_V4.0"
+    STORYDIFFUSION_STYLE: str = "Photographic"
+    STORYDIFFUSION_ID_LENGTH: int = 3  # consistent self-attention (мин. 3 сцены)
+    STORYDIFFUSION_SA32: float = 0.5
+    STORYDIFFUSION_SA64: float = 0.5
+
+    # Legacy alias (не используется напрямую)
+    SDXL_MODEL_ID: str = "SG161222/RealVisXL_V4.0"
 
     # Pipeline defaults
     DEFAULT_SCENES: int = 4

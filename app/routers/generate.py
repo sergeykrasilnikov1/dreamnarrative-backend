@@ -23,7 +23,7 @@ class GenerateRequest(BaseModel):
 
 
 async def _run_generation_background(job_id: str, req: GenerateRequest):
-    """Фоновая задача: SDXL + LAF на локальном GPU."""
+    """Фоновая задача: StoryDiffusion на локальном GPU."""
     store = job_store.get(job_id, {})
     store["gen_status"] = GenerationStatus.RUNNING
     job_store[job_id] = store
@@ -44,7 +44,7 @@ async def _run_generation_background(job_id: str, req: GenerateRequest):
         store["gen_error"] = str(e)
 
 
-@router.post("/start", response_model=GenerateResponse, summary="Запуск SDXL генерации на GPU")
+@router.post("/start", response_model=GenerateResponse, summary="Запуск StoryDiffusion генерации на GPU")
 async def generate_start(req: GenerateRequest, background_tasks: BackgroundTasks):
     job_id = req.job_id
 

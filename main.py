@@ -15,7 +15,7 @@ async def lifespan(app: FastAPI):
     gpu = gpu_status()
     llm_label = f"{settings.LLM_PROVIDER}:{settings.llm_model_label()}"
     print(f"DreamNarrative API — LLM: {llm_label}")
-    print(f"SDXL backend: local GPU — {gpu.get('progress_hint', 'n/a')}")
+    print(f"SDXL backend: StoryDiffusion — {gpu.get('progress_hint', 'n/a')}")
     yield
     print("Shutdown.")
 

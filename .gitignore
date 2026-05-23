@@ -9,4 +9,4 @@ outputs/
 .vscode/
 .cursor/
 *.egg-info/
-.DS_Store
+third_party/StoryDiffusion/
